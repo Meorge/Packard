@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QWidget,
     QDockWidget,
+    QFileDialog
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QPainter, QAction, QKeySequence
@@ -19,30 +20,20 @@ from constants import CELL_SIZE
 class MainWindow(QMainWindow):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.graph_scene = GraphScene()
-        self.graph_view = QGraphicsView(self.graph_scene, parent=self)
-        self.graph_view.setRenderHints(
-            self.graph_view.renderHints()
+        self.currentStoryPath: str | None = None
+
+        self.graphScene = GraphScene()
+        self.graphView = QGraphicsView(self.graphScene, parent=self)
+        self.graphView.setRenderHints(
+            self.graphView.renderHints()
             | QPainter.RenderHint.Antialiasing
             | QPainter.RenderHint.SmoothPixmapTransform
         )
-        self.graph_view.setMouseTracking(True)
+        self.graphView.setMouseTracking(True)
 
-        self.setCentralWidget(self.graph_view)
+        self.setCentralWidget(self.graphView)
 
-        block1 = StoryDocumentBlock()
-        block1.name = "Block 1"
-        block2 = StoryDocumentBlock()
-        block2.name = "Block 2"
-        block2.setX(CELL_SIZE * 5)
-        block2.setY(CELL_SIZE * 3)
-
-        block1.setBody("[[Block 2]]")
-
-        self.graph_scene.addItem(block1)
-        self.graph_scene.addItem(block2)
-
-        self.graph_scene.selectionChanged.connect(self.onSelectionChanged)
+        self.graphScene.selectionChanged.connect(self.onSelectionChanged)
 
         # set up editor
         self.editor = BlockEditor(self)
@@ -64,26 +55,52 @@ class MainWindow(QMainWindow):
         self.openAction.triggered.connect(self.onOpen)
         self.fileMenu.addAction(self.openAction)
 
+    def onSave(self):
+        if self.currentStoryPath is None:
+            self.onSaveAs()
+            return
+        save_story(self.currentStoryPath, self.graphScene.blocks())
+
     def onSaveAs(self):
-        save_story(self.graph_scene.blocks())
+        saveLocation = QFileDialog.getExistingDirectory(
+            self,
+            "Save Story As..."
+        )
+
+        if saveLocation == '':
+            return
+        
+        # TODO: handle errors in saving story
+        save_story(saveLocation, self.graphScene.blocks())
+
+        self.currentStoryPath = saveLocation
 
     def onOpen(self):
-        list_of_block_data = load_story("story")
+        openLocation = QFileDialog.getExistingDirectory(
+            self,
+            "Open Story..."
+        )
+        if openLocation == '':
+            return
+        
+        # TODO: handle errors in loading story
+        blockDataList = load_story(openLocation)
 
-        self.graph_scene.clear()
+        self.currentStoryPath = openLocation
 
-        for block_data in list_of_block_data:
+        self.graphScene.clear()
+        for block_data in blockDataList:
             new_block = StoryDocumentBlock()
             new_block.setName(block_data["name"])
             new_block.setX(block_data["x"])
             new_block.setY(block_data["y"])
             new_block.setBody(block_data["body"])
-            self.graph_scene.addItem(new_block)
+            self.graphScene.addItem(new_block)
 
-        self.graph_scene.refreshBlockConnections()
+        self.graphScene.refreshBlockConnections()
 
     def onSelectionChanged(self):
-        selectedItems = self.graph_scene.selectedItems()
+        selectedItems = self.graphScene.selectedItems()
         if len(selectedItems) == 1:
             self.editor.setBlock(selectedItems[0])
         else:
@@ -91,6 +108,6 @@ class MainWindow(QMainWindow):
 
 
 app = QApplication(argv)
-main_window = MainWindow()
-main_window.show()
+mainWindow = MainWindow()
+mainWindow.show()
 app.exec()

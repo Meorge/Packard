@@ -29,15 +29,13 @@ class StoryDocumentBlock(QGraphicsItem):
         super().__init__(parent)
         self.name = ""
         self.body = ""
-        self.x_pos = 0
-        self.y_pos = 0
-        self.block_connections: list[StoryDocumentBlock] = []
+        self.blockConnections: list[StoryDocumentBlock] = []
         self.setName("")
         self.setBody("")
 
-        self.hovering_on_output = False
+        self.hoveringOnOutput = False
 
-        self.creating_new_connection = False
+        self.creatingNewConnection = False
 
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
@@ -82,7 +80,7 @@ class StoryDocumentBlock(QGraphicsItem):
         )
 
         # Draw the output node
-        painter.setBrush(OUTPUT_COLOR.lighter(150 if self.hovering_on_output else 100))
+        painter.setBrush(OUTPUT_COLOR.lighter(150 if self.hoveringOnOutput else 100))
         painter.drawEllipse(self.outputNodeRect())
 
     def blockRect(self) -> QRectF:
@@ -126,23 +124,23 @@ class StoryDocumentBlock(QGraphicsItem):
 
     def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         if self.outputNodeRect().contains(event.pos()):
-            self.hovering_on_output = True
+            self.hoveringOnOutput = True
         self.scene().update(self.mapRectToScene(self.outputNodeRect()))
         return super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         if self.outputNodeRect().contains(event.pos()):
-            self.hovering_on_output = True
+            self.hoveringOnOutput = True
             self.scene().update(self.mapRectToScene(self.outputNodeRect()))
         elif not self.outputNodeRect().contains(
             event.pos()
         ) and self.outputNodeRect().contains(event.lastPos()):
-            self.hovering_on_output = False
+            self.hoveringOnOutput = False
             self.scene().update(self.mapRectToScene(self.outputNodeRect()))
         return super().hoverMoveEvent(event)
 
     def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
-        self.hovering_on_output = False
+        self.hoveringOnOutput = False
         self.scene().update(self.mapRectToScene(self.outputNodeRect()))
         return super().hoverLeaveEvent(event)
 
@@ -154,14 +152,14 @@ class StoryDocumentBlock(QGraphicsItem):
         self.setBody(self.body + "\n" + f"[[{target_block.name}]]")
 
     def analyzeBody(self):
-        self.block_connections.clear()
+        self.blockConnections.clear()
         if self.scene() is None:
             return
 
         for target_name in LINK_RE.findall(self.body):
             target_block = self.scene().blocksWithName(target_name)
             if len(target_block) == 1:
-                self.block_connections.append(target_block[0])
+                self.blockConnections.append(target_block[0])
             elif len(target_block) <= 0:
                 print(f'Uh oh, there\'s no block with the name "{target_name}"')
             else:
