@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsView,
     QWidget,
-    QDockWidget
+    QDockWidget,
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QPainter, QAction, QKeySequence
@@ -14,6 +14,7 @@ from story_document_block import StoryDocumentBlock
 from saver import load_story, save_story
 
 from constants import CELL_SIZE
+
 
 class MainWindow(QMainWindow):
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -63,7 +64,6 @@ class MainWindow(QMainWindow):
         self.openAction.triggered.connect(self.onOpen)
         self.fileMenu.addAction(self.openAction)
 
-
     def onSaveAs(self):
         save_story(self.graph_scene.blocks())
 
@@ -88,6 +88,7 @@ class MainWindow(QMainWindow):
             self.editor.setBlock(selectedItems[0])
         else:
             self.editor.setBlock(None)
+
 
 app = QApplication(argv)
 main_window = MainWindow()

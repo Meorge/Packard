@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QGraphicsSceneMouseEvent,
     QGraphicsScene,
 )
-from PyQt6.QtGui import QPainter, QBrush, QPen, QKeyEvent
+from PyQt6.QtGui import QPainter, QBrush, QPen, QKeyEvent, QPainterPath, QPolygonF
 from PyQt6.QtCore import QRectF, Qt, QPointF
 
 from story_document_block import StoryDocumentBlock
@@ -11,12 +11,13 @@ from story_document_block import StoryDocumentBlock
 from constants import (
     CELL_SIZE,
     BG_COLOR,
+    CONNECTION_BEZIER_AMT,
     GRID_COLOR,
     CONNECTION_COLOR,
     CONNECTION_WIDTH,
     TEMP_NEW_BLOCK_COLOR,
     TEMP_NEW_BLOCK_PEN,
-    BLOCK_RECT_SIZE
+    BLOCK_RECT_SIZE,
 )
 
 
@@ -50,15 +51,34 @@ class GraphScene(QGraphicsScene):
             if not isinstance(item, StoryDocumentBlock):
                 continue
             for conn in item.block_connections:
+                painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                 painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
-                painter.drawLine(item.rightSide(), conn.leftSide())
+
+                path = QPainterPath()
+                path.moveTo(item.rightSide())
+                path.cubicTo(
+                    item.rightSide() + QPointF(CONNECTION_BEZIER_AMT, 0),
+                    conn.leftSide() + QPointF(-CONNECTION_BEZIER_AMT, 0),
+                    conn.leftSide() + QPointF(-5, 0),
+                )
+                painter.drawPath(path)
+                self.drawArrowhead(painter, conn.leftSide())
 
         if self.item_creating_new_connection is not None:
             painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
-            painter.drawLine(
-                self.item_creating_new_connection.rightSide(),
-                self.new_connection_target_point,
+
+            path = QPainterPath()
+            path.moveTo(self.item_creating_new_connection.rightSide())
+            path.cubicTo(
+                self.item_creating_new_connection.rightSide()
+                + QPointF(CONNECTION_BEZIER_AMT, 0),
+                self.new_connection_target_point + QPointF(-CONNECTION_BEZIER_AMT, 0),
+                self.new_connection_target_point + QPointF(-5, 0),
             )
+            painter.drawPath(path)
+
+            # Draw arrowhead
+            self.drawArrowhead(painter, self.new_connection_target_point)
 
             if self.new_connection_target_block is None:
                 painter.setBrush(TEMP_NEW_BLOCK_COLOR)
@@ -93,9 +113,21 @@ class GraphScene(QGraphicsScene):
 
         return super().drawBackground(painter, rect)
 
+    def drawArrowhead(self, painter: QPainter, pos: QPointF):
+        arrowhead = QPolygonF()
+        arrowhead.append(QPointF(0, 0) + pos)
+        arrowhead.append(QPointF(-15, -7) + pos)
+        arrowhead.append(QPointF(-15, 7) + pos)
+
+        arrowheadPath = QPainterPath()
+        arrowheadPath.addPolygon(arrowhead)
+        painter.setBrush(CONNECTION_COLOR)
+        painter.setPen(QPen(Qt.PenStyle.NoPen))
+        painter.drawPath(arrowheadPath)
+
     def blocks(self) -> list[StoryDocumentBlock]:
         return [b for b in self.items() if isinstance(b, StoryDocumentBlock)]
-    
+
     def blocksWithName(self, name: str) -> list[StoryDocumentBlock]:
         return [b for b in self.blocks() if b.name == name]
 
@@ -135,7 +167,6 @@ class GraphScene(QGraphicsScene):
                 new_block.name = str(int(time()))
                 self.addItem(new_block)
                 self.item_creating_new_connection.connectOutputToBlock(new_block)
-                
 
             else:
                 self.item_creating_new_connection.connectOutputToBlock(
@@ -169,7 +200,6 @@ class GraphScene(QGraphicsScene):
                 ]:
                     try:
                         source_block.block_connections.remove(item)
-                        print(f"Removed {item.name} from {source_block.name}")
                     except ValueError:
                         pass
 

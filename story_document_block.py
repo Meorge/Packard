@@ -4,14 +4,25 @@ from PyQt6.QtWidgets import (
     QStyleOptionGraphicsItem,
     QWidget,
     QGraphicsItem,
+    QGraphicsDropShadowEffect,
 )
 from PyQt6.QtGui import QPainter, QPen
 from PyQt6.QtCore import QRectF, Qt, QPointF, QSizeF
 from re import compile
 
-from constants import SELECTED_BLOCK_COLOR, BLOCK_COLOR, OUTPUT_COLOR, OUTPUT_RADIUS, BLOCK_RECT_SIZE
+from constants import (
+    SELECTED_BLOCK_COLOR,
+    BLOCK_COLOR,
+    OUTPUT_COLOR,
+    OUTPUT_RADIUS,
+    BLOCK_RECT_SIZE,
+    DROP_SHADOW_COLOR,
+    DROP_SHADOW_PICKUP_RADIUS,
+    SELECTED_BLOCK_PEN,
+)
 
-LINK_RE = compile(r'\[\[(.*?)\]\]')
+LINK_RE = compile(r"\[\[(.*?)\]\]")
+
 
 class StoryDocumentBlock(QGraphicsItem):
     def __init__(self, parent: QGraphicsItem | None = None) -> None:
@@ -23,7 +34,6 @@ class StoryDocumentBlock(QGraphicsItem):
         self.block_connections: list[StoryDocumentBlock] = []
         self.setName("")
         self.setBody("")
-
 
         self.hovering_on_output = False
 
@@ -53,8 +63,10 @@ class StoryDocumentBlock(QGraphicsItem):
         option: QStyleOptionGraphicsItem,
         widget: QWidget | None = ...,
     ) -> None:
-        painter.setBrush(SELECTED_BLOCK_COLOR if self.isSelected() else BLOCK_COLOR)
-        painter.setPen(QPen(Qt.PenStyle.NoPen))
+        painter.setBrush(BLOCK_COLOR)
+        painter.setPen(
+            SELECTED_BLOCK_PEN if self.isSelected() else QPen(Qt.PenStyle.NoPen)
+        )
         painter.drawRoundedRect(
             self.blockRect(),
             10,
@@ -66,8 +78,8 @@ class StoryDocumentBlock(QGraphicsItem):
         painter.drawText(
             self.blockRect(),
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-            self.name
-            )
+            self.name,
+        )
 
         # Draw the output node
         painter.setBrush(OUTPUT_COLOR.lighter(150 if self.hovering_on_output else 100))
@@ -140,27 +152,29 @@ class StoryDocumentBlock(QGraphicsItem):
 
     def connectOutputToBlock(self, target_block: "StoryDocumentBlock"):
         self.setBody(self.body + "\n" + f"[[{target_block.name}]]")
-    
+
     def analyzeBody(self):
         self.block_connections.clear()
         if self.scene() is None:
             return
-        
+
         for target_name in LINK_RE.findall(self.body):
             target_block = self.scene().blocksWithName(target_name)
             if len(target_block) == 1:
                 self.block_connections.append(target_block[0])
             elif len(target_block) <= 0:
-                print(f"Uh oh, there's no block with the name \"{target_name}\"")
+                print(f'Uh oh, there\'s no block with the name "{target_name}"')
             else:
-                print(f"Uh oh, there are more than one block with the name \"{target_name}\"")
+                print(
+                    f'Uh oh, there are more than one block with the name "{target_name}"'
+                )
 
         self.scene().update()
 
     def updateNameInOtherBlocks(self, oldName: str):
         if self.scene() is None:
             return
-        
+
         for block in self.scene().blocks():
             block: StoryDocumentBlock
             updated_body = block.body.replace(f"[[{oldName}]]", f"[[{self.name}]]")

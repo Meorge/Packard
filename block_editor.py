@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QWidget, QLineEdit, QTextEdit, QVBoxLayout
 
 from story_document_block import StoryDocumentBlock
 
+
 class BlockEditor(QWidget):
     def __init__(self, parent: QWidget | None = ...) -> None:
         super().__init__(parent)
