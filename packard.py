@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QWidget,
     QDockWidget,
+    QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QPainter, QAction, QKeySequence
@@ -36,6 +37,13 @@ class MainWindow(QMainWindow):
         block2.name = "Block 2"
         block2.setX(CELL_SIZE * 5)
         block2.setY(CELL_SIZE * 3)
+
+        # TODO: is there a way to make this work??? outside the block object???
+        # self.b = QGraphicsDropShadowEffect()
+        # self.b.setBlurRadius(50)
+        # self.b.setColor(Qt.GlobalColor.white)
+        # self.b.setEnabled(True)
+        # block1.setGraphicsEffect(self.b)
 
         block1.setBody("[[Block 2]]")
 
