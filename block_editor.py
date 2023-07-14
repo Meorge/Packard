@@ -17,6 +17,7 @@ class BlockEditor(QWidget):
         self.isStartBlockField.clicked.connect(self.blockStartChanged)
 
         self.bodyField = QTextEdit()
+        self.bodyField.setAcceptRichText(False)
         self.bodyField.textChanged.connect(self.blockBodyChanged)
 
         self.setLayout(QVBoxLayout())

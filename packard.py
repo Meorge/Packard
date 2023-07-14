@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QWidget,
     QDockWidget,
-    QFileDialog
+    QFileDialog,
 )
 from PyQt6.QtCore import Qt, QObject
 from PyQt6.QtGui import QPainter, QAction, QKeySequence
@@ -13,8 +13,9 @@ from sys import argv
 from block_editor import BlockEditor
 from graph_scene import GraphScene
 from story_document_block import StoryDocumentBlock
-from saver import load_story, save_story
+from saver import load_story, save_story, compile_story_to_html
 from os.path import basename
+
 
 class StoryBlock(QObject):
     def __init__(self, parent: QObject | None = ...) -> None:
@@ -22,17 +23,19 @@ class StoryBlock(QObject):
         self.name: str = ""
         self.body: str = ""
 
+
 class Story(QObject):
     def __init__(self, parent: QObject | None = ...) -> None:
         super().__init__(parent)
         self.startBlock: StoryBlock = None
         self.blocks: list[StoryBlock] = []
 
+
 class MainWindow(QMainWindow):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.currentStoryPath: str | None = None
-        
+
         # TODO: rather than having each block store whether or not it's
         # a start block, we should store a "story state" object that contains
         # all the block data, as well as the one block which is the start
@@ -62,21 +65,36 @@ class MainWindow(QMainWindow):
         # menu bar
         self.fileMenu = self.menuBar().addMenu("&File")
 
-        self.saveAction = QAction("&Save", self)
-        self.saveAction.setShortcut(QKeySequence.StandardKey.Save)
-        self.saveAction.triggered.connect(self.onSave)
+        self.saveAction = QAction(
+            "&Save",
+            parent=self,
+            shortcut=QKeySequence.StandardKey.Save,
+            triggered=self.onSave,
+        )
+        self.saveAsAction = QAction(
+            "&Save As...",
+            parent=self,
+            shortcut=QKeySequence.StandardKey.SaveAs,
+            triggered=self.onSaveAs,
+        )
+        self.openAction = QAction(
+            "&Open...",
+            parent=self,
+            shortcut=QKeySequence.StandardKey.Open,
+            triggered=self.onOpen,
+        )
+        self.compileStoryAction = QAction(
+            "&Compile...",
+            parent=self,
+            shortcut=QKeySequence("Ctrl+Shift+E"),
+            triggered=self.onCompileStory,
+        )
+
         self.fileMenu.addAction(self.saveAction)
-
-
-        self.saveAsAction = QAction("&Save As...", self)
-        self.saveAsAction.setShortcut(QKeySequence.StandardKey.SaveAs)
-        self.saveAsAction.triggered.connect(self.onSaveAs)
         self.fileMenu.addAction(self.saveAsAction)
-
-        self.openAction = QAction("&Open", self)
-        self.openAction.setShortcut(QKeySequence.StandardKey.Open)
-        self.openAction.triggered.connect(self.onOpen)
         self.fileMenu.addAction(self.openAction)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.compileStoryAction)
 
         self.setWindowTitle("Packard - Untitled Story")
 
@@ -84,32 +102,30 @@ class MainWindow(QMainWindow):
         if self.currentStoryPath is None:
             self.onSaveAs()
             return
-        save_story(self.currentStoryPath, self.graphScene.startBlock.name, self.graphScene.blocks())
-
-    def onSaveAs(self):
-        saveLocation = QFileDialog.getExistingDirectory(
-            self,
-            "Save Story As..."
+        save_story(
+            self.currentStoryPath,
+            self.graphScene.startBlock.name,
+            self.graphScene.blocks(),
         )
 
-        if saveLocation == '':
+    def onSaveAs(self):
+        saveLocation = QFileDialog.getExistingDirectory(self, "Save Story As...")
+
+        if saveLocation == "":
             return
-        
+
         # TODO: handle errors in saving story
-        save_story(saveLocation, self.graphScene.blocks())
+        save_story(saveLocation, self.graphScene.startBlock.name, self.graphScene.blocks())
 
         self.currentStoryPath = saveLocation
 
         self.setWindowTitle(f"Packard - {basename(self.currentStoryPath)}")
 
     def onOpen(self):
-        openLocation = QFileDialog.getExistingDirectory(
-            self,
-            "Open Story..."
-        )
-        if openLocation == '':
+        openLocation = QFileDialog.getExistingDirectory(self, "Open Story...")
+        if openLocation == "":
             return
-        
+
         # TODO: handle errors in loading story
         storyData = load_story(openLocation)
 
@@ -130,6 +146,15 @@ class MainWindow(QMainWindow):
         self.graphScene.refreshBlockConnections()
 
         self.setWindowTitle(f"Packard - {basename(self.currentStoryPath)}")
+
+    def onCompileStory(self):
+        compileLocation = QFileDialog.getExistingDirectory(self, "Compile Story...")
+
+        if compileLocation == "":
+            return
+        
+        self.onSave()
+        compile_story_to_html(compileLocation, self.currentStoryPath)
 
     def onSelectionChanged(self):
         print(self.graphScene)

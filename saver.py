@@ -2,12 +2,54 @@ from story_document_block import StoryDocumentBlock
 from json import dump, load
 from os.path import join, exists
 from os import mkdir
+from re import compile
+from yattag import Doc
+
+
+def compile_story_to_html(base_path: str, story_source_path: str):
+    loaded_story = load_story(story_source_path)
+
+    LINK_RE = compile(r"\[\[(.*?)\]\]")
+
+    pages_dir = join(base_path, "pages")
+    if not exists(pages_dir):
+        mkdir(pages_dir)
+
+    for block in loaded_story.get("blocks", []):
+        block_page_path = join(pages_dir, f"{block['name']}.html")
+        block_page_content = LINK_RE.sub(r'<a href="\1.html">\1</a>', block["body"])
+        block_page_content = block_page_content.replace('\n','<br/>')
+
+        doc, tag, text = Doc().tagtext()
+        doc.asis("<!DOCTYPE html>")
+        with tag("html"):
+            with tag("body"):
+                doc.asis(block_page_content)
+
+        with open(block_page_path, "w") as f:
+            f.write(doc.getvalue())
+
+    # Now create index file
+    with open(join(base_path, "index.html"), "w") as f:
+        doc, tag, text = Doc().tagtext()
+        doc.asis("<!DOCTYPE html>")
+        with tag("html"):
+            with tag("head"):
+                doc.stag(
+                    "meta",
+                    **{
+                        "http-equiv": "refresh",
+                        "content": f"0; url='pages/{loaded_story['start']}.html'",
+                    },
+                )
+
+        f.write(doc.getvalue())
 
 
 def save_story(base_path: str, start_block_name: str, blocks: list[StoryDocumentBlock]):
     meta_path = join(base_path, "meta")
     content_path = join(base_path, "content")
-    
+
     if not exists(meta_path):
         mkdir(meta_path)
     if not exists(content_path):
