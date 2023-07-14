@@ -27,6 +27,7 @@ class GraphScene(QGraphicsScene):
         self.newConnectionTargetBlock: StoryDocumentBlock | None = None
         self.itemCreatingNewConnection = None
         self.newConnectionTargetPoint = QPointF(0, 0)
+        self.startBlock: StoryDocumentBlock | None = None
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.setBrush(QBrush(BG_COLOR))
@@ -46,6 +47,16 @@ class GraphScene(QGraphicsScene):
             painter.drawLine(x, y1, x, y2)
         for y in range(int(y1), int(y2 + 1), CELL_SIZE):
             painter.drawLine(x1, y, x2, y)
+
+        # Draw start block arrow
+        if self.startBlock is not None:
+            startBlockSide = self.startBlock.leftSide()
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
+            painter.drawLine(
+                startBlockSide + QPointF(-100, 0), startBlockSide + QPointF(-5, 0)
+            )
+            self.drawArrowhead(painter, startBlockSide)
 
         for item in self.items():
             if not isinstance(item, StoryDocumentBlock):
@@ -144,9 +155,7 @@ class GraphScene(QGraphicsScene):
             ]
             if len(overlappingBlocks) > 0:
                 self.newConnectionTargetBlock = overlappingBlocks[0]
-                self.newConnectionTargetPoint = (
-                    self.newConnectionTargetBlock.leftSide()
-                )
+                self.newConnectionTargetPoint = self.newConnectionTargetBlock.leftSide()
             else:
                 self.newConnectionTargetBlock = None
                 self.newConnectionTargetPoint = event.scenePos()
@@ -226,4 +235,8 @@ class GraphScene(QGraphicsScene):
     def refreshBlockConnections(self):
         for block in self.blocks():
             block.analyzeBody()
+        self.update()
+
+    def setStartBlock(self, block: "StoryDocumentBlock"):
+        self.startBlock = block
         self.update()

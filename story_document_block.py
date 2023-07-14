@@ -29,6 +29,7 @@ class StoryDocumentBlock(QGraphicsItem):
         super().__init__(parent)
         self.name = ""
         self.body = ""
+        self.__isStartBlock = False
         self.blockConnections: list[StoryDocumentBlock] = []
         self.setName("")
         self.setBody("")
@@ -177,3 +178,6 @@ class StoryDocumentBlock(QGraphicsItem):
             block: StoryDocumentBlock
             updated_body = block.body.replace(f"[[{oldName}]]", f"[[{self.name}]]")
             block.setBody(updated_body)
+
+    def setIsStartBlock(self):
+        self.scene().setStartBlock(self)

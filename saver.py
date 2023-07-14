@@ -4,7 +4,7 @@ from os.path import join, exists
 from os import mkdir
 
 
-def save_story(base_path: str, blocks: list[StoryDocumentBlock]):
+def save_story(base_path: str, start_block_name: str, blocks: list[StoryDocumentBlock]):
     meta_path = join(base_path, "meta")
     content_path = join(base_path, "content")
     
@@ -13,8 +13,6 @@ def save_story(base_path: str, blocks: list[StoryDocumentBlock]):
     if not exists(content_path):
         mkdir(content_path)
 
-    # TODO: clear files from inside meta and content folders
-        
     list_of_block_names = []
     for block in blocks:
         content = {
@@ -30,7 +28,7 @@ def save_story(base_path: str, blocks: list[StoryDocumentBlock]):
         list_of_block_names.append(block.name)
 
     with open(join(base_path, f"main.json"), "w") as f:
-        dump({"blocks": list_of_block_names}, f, indent=4)
+        dump({"blocks": list_of_block_names, "start": start_block_name}, f, indent=4)
 
 
 def load_story(base_path: str):
@@ -61,4 +59,4 @@ def load_story(base_path: str):
             }
         )
 
-    return blocks
+    return {"blocks": blocks, "start": metadata.get("start", None)}
