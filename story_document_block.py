@@ -30,6 +30,7 @@ class StoryBlockGraphicsItem(QGraphicsItem):
         super().__init__(parent)
         self.hoveringOnOutput = False
         self.creatingNewConnection = False
+        self.lastPos: QPointF = None
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
@@ -38,6 +39,7 @@ class StoryBlockGraphicsItem(QGraphicsItem):
     def setStoryBlock(self, block: StoryBlock):
         self.setData(0, block)
         self.setPos(block.pos())
+        self.lastPos = self.scenePos()
 
     def storyBlock(self) -> StoryBlock:
         return self.data(0)
@@ -64,6 +66,12 @@ class StoryBlockGraphicsItem(QGraphicsItem):
             self.blockRect(),
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
             self.storyBlock().name(),
+        )
+
+        painter.drawText(
+            self.blockRect(),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap,
+            f"{self.x()}, {self.y()}",
         )
 
         # Draw the output node
@@ -104,6 +112,13 @@ class StoryBlockGraphicsItem(QGraphicsItem):
             event.ignore()
         else:
             return super().mousePressEvent(event)
+        
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if self.lastPos != self.scenePos():
+            self.storyBlock().setPos(self.scenePos())
+            self.lastPos = self.scenePos()
+            
+        return super().mouseReleaseEvent(event)
 
     def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         if self.outputNodeRect().contains(event.pos()):

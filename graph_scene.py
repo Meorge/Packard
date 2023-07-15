@@ -25,13 +25,40 @@ from constants import (
 class GraphScene(QGraphicsScene):
     blockAdded = pyqtSignal(StoryBlock)
     blockRemoved = pyqtSignal(StoryBlock)
-    def __init__(self, parent=None, state: Story = None):
+
+    def __init__(self, parent=None, story: Story = None):
         super().__init__(parent)
-        self.__state = state
+
+        self.__story = story
+        self.__story.stateChanged.connect(self.update)
+
         self.newConnectionTargetBlock: StoryBlockGraphicsItem | None = None
         self.itemCreatingNewConnection = None
         self.newConnectionTargetPoint = QPointF(0, 0)
-        self.startBlock: StoryBlockGraphicsItem | None = None
+
+    def setStory(self, story: Story):
+        self.__story.stateChanged.disconnect(self.update)
+        self.__story = story
+        self.__story.stateChanged.connect(self.update)
+        self.clear()
+        self.newConnectionTargetBlock = None
+        self.itemCreatingNewConnection = None
+        self.newConnectionTargetPoint = QPointF(0, 0)
+
+        for block in self.__story.blocks():
+            newBlockGraphic = StoryBlockGraphicsItem(block=block)
+            self.addItem(newBlockGraphic)
+
+        self.update()
+
+
+    def getGraphicsItemFromStoryBlock(
+        self, block: StoryBlock
+    ) -> StoryBlockGraphicsItem:
+        for blockGraphicsItem in self.blockGraphicsItems():
+            if blockGraphicsItem.storyBlock() == block:
+                return blockGraphicsItem
+        return None
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.setBrush(QBrush(BG_COLOR))
@@ -53,8 +80,10 @@ class GraphScene(QGraphicsScene):
             painter.drawLine(x1, y, x2, y)
 
         # Draw start block arrow
-        if self.startBlock is not None:
-            startBlockSide = self.startBlock.leftSide()
+        if self.__story.startBlock() is not None:
+            startBlockSide = self.getGraphicsItemFromStoryBlock(
+                self.__story.startBlock()
+            ).leftSide()
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
             painter.drawLine(
@@ -63,7 +92,9 @@ class GraphScene(QGraphicsScene):
             self.drawArrowhead(painter, startBlockSide)
 
         for sourceBlockGraphicsItem in self.blockGraphicsItems():
-            targetBlocks = self.__state.getConnectionsForBlock(sourceBlockGraphicsItem.storyBlock())
+            targetBlocks = self.__story.getConnectionsForBlock(
+                sourceBlockGraphicsItem.storyBlock()
+            )
             for targetBlock in targetBlocks:
                 # Find the graphicsitem that this block goes to
                 targetBlockGraphicsItem = None
@@ -77,8 +108,10 @@ class GraphScene(QGraphicsScene):
                 path = QPainterPath()
                 path.moveTo(sourceBlockGraphicsItem.rightSide())
                 path.cubicTo(
-                    sourceBlockGraphicsItem.rightSide() + QPointF(CONNECTION_BEZIER_AMT, 0),
-                    targetBlockGraphicsItem.leftSide() + QPointF(-CONNECTION_BEZIER_AMT, 0),
+                    sourceBlockGraphicsItem.rightSide()
+                    + QPointF(CONNECTION_BEZIER_AMT, 0),
+                    targetBlockGraphicsItem.leftSide()
+                    + QPointF(-CONNECTION_BEZIER_AMT, 0),
                     targetBlockGraphicsItem.leftSide() + QPointF(-5, 0),
                 )
                 painter.drawPath(path)
@@ -132,6 +165,9 @@ class GraphScene(QGraphicsScene):
                     10,
                 )
 
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(Qt.GlobalColor.green)
+        painter.drawRect(self.sceneRect())
         return super().drawBackground(painter, rect)
 
     def drawArrowhead(self, painter: QPainter, pos: QPointF):
@@ -171,11 +207,9 @@ class GraphScene(QGraphicsScene):
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if self.itemCreatingNewConnection is not None:
             if self.newConnectionTargetBlock is None:
-
                 newBlockPos = QPointF(
                     self.newConnectionTargetPoint.x(),
-                    self.newConnectionTargetPoint.y()
-                    - CELL_SIZE / 2
+                    self.newConnectionTargetPoint.y() - CELL_SIZE / 2,
                 )
 
                 newBlock = StoryBlock(pos=newBlockPos)
@@ -184,7 +218,7 @@ class GraphScene(QGraphicsScene):
 
                 self.addItem(newBlockGraphic)
                 self.blockAdded.emit(newBlock)
-                
+
                 self.itemCreatingNewConnection.storyBlock().addConnection(newBlock)
 
             else:
@@ -231,7 +265,3 @@ class GraphScene(QGraphicsScene):
 
     def startCreatingNewConnection(self, source: "StoryBlockGraphicsItem"):
         self.itemCreatingNewConnection = source
-
-    def setStartBlock(self, block: "StoryBlockGraphicsItem"):
-        self.startBlock = block
-        self.update()

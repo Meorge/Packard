@@ -46,7 +46,7 @@ def compile_story_to_html(base_path: str, story_source_path: str):
         f.write(doc.getvalue())
 
 
-def save_story(base_path: str, start_block_name: str, blocks: list[StoryBlockGraphicsItem]):
+def save_story(base_path: str, story_data: dict):
     meta_path = join(base_path, "meta")
     content_path = join(base_path, "content")
 
@@ -56,21 +56,21 @@ def save_story(base_path: str, start_block_name: str, blocks: list[StoryBlockGra
         mkdir(content_path)
 
     list_of_block_names = []
-    for block in blocks:
+    for block in story_data["blocks"]:
         content = {
-            "x": block.x(),
-            "y": block.y(),
+            "x": block["x"],
+            "y": block["y"],
         }
-        with open(join(meta_path, f"{block.name}.json"), "w") as f:
+        with open(join(meta_path, f"{block['name']}.json"), "w") as f:
             dump(content, f, indent=4)
 
-        with open(join(content_path, f"{block.name}.txt"), "w") as f:
-            f.write(block.body)
+        with open(join(content_path, f"{block['name']}.txt"), "w") as f:
+            f.write(block['body'])
 
-        list_of_block_names.append(block.name)
+        list_of_block_names.append(block['name'])
 
     with open(join(base_path, f"main.json"), "w") as f:
-        dump({"blocks": list_of_block_names, "start": start_block_name}, f, indent=4)
+        dump({"blocks": list_of_block_names, "start": story_data['start']}, f, indent=4)
 
 
 def load_story(base_path: str):

@@ -17,19 +17,15 @@ from os.path import basename
 
 from story_components import Story, StoryBlock
 
+
 class MainWindow(QMainWindow):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.currentStoryPath: str | None = None
 
-        # TODO: rather than having each block store whether or not it's
-        # a start block, we should store a "story state" object that contains
-        # all the block data, as well as the one block which is the start
-        # block.
-
         self.currentStory = Story(self)
 
-        self.graphScene = GraphScene(self, state=self.currentStory)
+        self.graphScene = GraphScene(self, story=self.currentStory)
 
         self.graphScene.blockAdded.connect(self.blockAdded)
         self.graphScene.blockRemoved.connect(self.blockRemoved)
@@ -94,11 +90,21 @@ class MainWindow(QMainWindow):
         if self.currentStoryPath is None:
             self.onSaveAs()
             return
-        save_story(
-            self.currentStoryPath,
-            self.graphScene.startBlock.name,
-            self.graphScene.blockGraphicsItems(),
-        )
+        save_story(self.currentStoryPath, self.storyObjectToDict())
+
+    def storyObjectToDict(self):
+        return {
+            "start": self.currentStory.startBlock().name(),
+            "blocks": [
+                {
+                    "x": block.pos().x(),
+                    "y": block.pos().y(),
+                    "name": block.name(),
+                    "body": block.body(),
+                }
+                for block in self.currentStory.blocks()
+            ],
+        }
 
     def onSaveAs(self):
         saveLocation = QFileDialog.getExistingDirectory(self, "Save Story As...")
@@ -106,8 +112,10 @@ class MainWindow(QMainWindow):
         if saveLocation == "":
             return
 
+        storyData = self.storyObjectToDict()
+
         # TODO: handle errors in saving story
-        save_story(saveLocation, self.graphScene.startBlock.name, self.graphScene.blockGraphicsItems())
+        save_story(saveLocation, storyData)
 
         self.currentStoryPath = saveLocation
 
@@ -121,17 +129,25 @@ class MainWindow(QMainWindow):
         # TODO: handle errors in loading story
         storyData = load_story(openLocation)
 
+        blocks = []
+        startBlock = None
+        for blockData in storyData["blocks"]:
+            newBlock = StoryBlock(
+                name=blockData["name"],
+                body=blockData["body"],
+                pos=QPointF(blockData["x"], blockData["y"]),
+            )
+            blocks.append(newBlock)
+            if blockData["name"] == storyData["start"]:
+                startBlock = newBlock
+
+        newStory = Story(startBlock=startBlock, blocks=blocks)
+
+        self.currentStory = newStory
+
         self.currentStoryPath = openLocation
 
-        self.graphScene.clear()
-        for block_data in storyData["blocks"]:
-            new_block = StoryBlockGraphicsItem()
-            new_block.setX(block_data["x"])
-            new_block.setY(block_data["y"])
-            self.graphScene.addItem(new_block)
-
-            if block_data["name"] == storyData["start"]:
-                self.graphScene.setStartBlock(new_block)
+        self.graphScene.setStory(self.currentStory)
 
         self.setWindowTitle(f"Packard - {basename(self.currentStoryPath)}")
 
@@ -140,7 +156,7 @@ class MainWindow(QMainWindow):
 
         if compileLocation == "":
             return
-        
+
         self.onSave()
         compile_story_to_html(compileLocation, self.currentStoryPath)
 
@@ -156,6 +172,7 @@ class MainWindow(QMainWindow):
 
     def blockRemoved(self, block: StoryBlock):
         self.currentStory.removeBlock(block)
+
 
 app = QApplication(argv)
 mainWindow = MainWindow()
