@@ -1,4 +1,4 @@
-from story_document_block import StoryDocumentBlock
+from story_document_block import StoryBlockGraphicsItem
 from json import dump, load
 from os.path import join, exists
 from os import mkdir
@@ -46,7 +46,7 @@ def compile_story_to_html(base_path: str, story_source_path: str):
         f.write(doc.getvalue())
 
 
-def save_story(base_path: str, start_block_name: str, blocks: list[StoryDocumentBlock]):
+def save_story(base_path: str, start_block_name: str, blocks: list[StoryBlockGraphicsItem]):
     meta_path = join(base_path, "meta")
     content_path = join(base_path, "content")
 

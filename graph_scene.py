@@ -7,7 +7,7 @@ from PyQt6.QtGui import QPainter, QBrush, QPen, QKeyEvent, QPainterPath, QPolygo
 from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal
 
 from story_components import Story, StoryBlock
-from story_document_block import StoryDocumentBlock
+from story_document_block import StoryBlockGraphicsItem
 
 from constants import (
     CELL_SIZE,
@@ -28,10 +28,10 @@ class GraphScene(QGraphicsScene):
     def __init__(self, parent=None, state: Story = None):
         super().__init__(parent)
         self.__state = state
-        self.newConnectionTargetBlock: StoryDocumentBlock | None = None
+        self.newConnectionTargetBlock: StoryBlockGraphicsItem | None = None
         self.itemCreatingNewConnection = None
         self.newConnectionTargetPoint = QPointF(0, 0)
-        self.startBlock: StoryDocumentBlock | None = None
+        self.startBlock: StoryBlockGraphicsItem | None = None
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.setBrush(QBrush(BG_COLOR))
@@ -62,16 +62,14 @@ class GraphScene(QGraphicsScene):
             )
             self.drawArrowhead(painter, startBlockSide)
 
-        print("---")
-        for sourceBlockGraphicsItem in self.blocks():
+        for sourceBlockGraphicsItem in self.blockGraphicsItems():
             targetBlocks = self.__state.getConnectionsForBlock(sourceBlockGraphicsItem.storyBlock())
-            print(f"Looking at block with name {sourceBlockGraphicsItem.storyBlock().name()} which has connections {targetBlocks}")
             for targetBlock in targetBlocks:
                 # Find the graphicsitem that this block goes to
-                targetBlockGraphicsItem = None # Issue - this is None
-                for block in self.blocks():
-                    if block == sourceBlockGraphicsItem.storyBlock():
-                        targetBlockGraphicsItem = block
+                targetBlockGraphicsItem = None
+                for blockGraphicsItem in self.blockGraphicsItems():
+                    if blockGraphicsItem.data(0) == targetBlock:
+                        targetBlockGraphicsItem = blockGraphicsItem
                         break
                 painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                 painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
@@ -148,8 +146,8 @@ class GraphScene(QGraphicsScene):
         painter.setPen(QPen(Qt.PenStyle.NoPen))
         painter.drawPath(arrowheadPath)
 
-    def blocks(self) -> list[StoryDocumentBlock]:
-        return [b for b in self.items() if isinstance(b, StoryDocumentBlock)]
+    def blockGraphicsItems(self) -> list[StoryBlockGraphicsItem]:
+        return [b for b in self.items() if isinstance(b, StoryBlockGraphicsItem)]
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if self.itemCreatingNewConnection is not None:
@@ -158,7 +156,7 @@ class GraphScene(QGraphicsScene):
             pos = event.scenePos()
             overlappingBlocks = [
                 block
-                for block in self.blocks()
+                for block in self.blockGraphicsItems()
                 if block.sceneBoundingRect().contains(pos)
             ]
             if len(overlappingBlocks) > 0:
@@ -182,8 +180,8 @@ class GraphScene(QGraphicsScene):
 
                 newBlock = StoryBlock(pos=newBlockPos)
 
-                newBlockGraphic = StoryDocumentBlock()
-                newBlockGraphic.setData(0, newBlock)
+                newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
+
                 self.addItem(newBlockGraphic)
                 self.blockAdded.emit(newBlock)
                 
@@ -212,7 +210,7 @@ class GraphScene(QGraphicsScene):
 
         elif event.key() == Qt.Key.Key_Delete:
             for item in self.selectedItems():
-                if not isinstance(item, StoryDocumentBlock):
+                if not isinstance(item, StoryBlockGraphicsItem):
                     continue
 
                 self.blockRemoved.emit(item.data(0))
@@ -225,16 +223,15 @@ class GraphScene(QGraphicsScene):
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if self.itemCreatingNewConnection is None:
             newBlock = StoryBlock(pos=event.scenePos())
-            newBlockGraphic = StoryDocumentBlock()
-            newBlockGraphic.setData(0, newBlock)
+            newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
             self.addItem(newBlockGraphic)
             self.blockAdded.emit(newBlock)
 
         return super().mouseDoubleClickEvent(event)
 
-    def startCreatingNewConnection(self, source: "StoryDocumentBlock"):
+    def startCreatingNewConnection(self, source: "StoryBlockGraphicsItem"):
         self.itemCreatingNewConnection = source
 
-    def setStartBlock(self, block: "StoryDocumentBlock"):
+    def setStartBlock(self, block: "StoryBlockGraphicsItem"):
         self.startBlock = block
         self.update()

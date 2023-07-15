@@ -11,7 +11,7 @@ from PyQt6.QtGui import QPainter, QAction, QKeySequence
 from sys import argv
 from block_editor import BlockEditor
 from graph_scene import GraphScene
-from story_document_block import StoryDocumentBlock
+from story_document_block import StoryBlockGraphicsItem
 from saver import load_story, save_story, compile_story_to_html
 from os.path import basename
 
@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         self.graphScene.selectionChanged.connect(self.onSelectionChanged)
 
         # set up editor
-        self.editor = BlockEditor(self)
+        self.editor = BlockEditor(parent=self, story=self.currentStory)
         self.onSelectionChanged()
 
         self.editorDockWidget = QDockWidget("Editor")
@@ -97,7 +97,7 @@ class MainWindow(QMainWindow):
         save_story(
             self.currentStoryPath,
             self.graphScene.startBlock.name,
-            self.graphScene.blocks(),
+            self.graphScene.blockGraphicsItems(),
         )
 
     def onSaveAs(self):
@@ -107,7 +107,7 @@ class MainWindow(QMainWindow):
             return
 
         # TODO: handle errors in saving story
-        save_story(saveLocation, self.graphScene.startBlock.name, self.graphScene.blocks())
+        save_story(saveLocation, self.graphScene.startBlock.name, self.graphScene.blockGraphicsItems())
 
         self.currentStoryPath = saveLocation
 
@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
 
         self.graphScene.clear()
         for block_data in storyData["blocks"]:
-            new_block = StoryDocumentBlock()
+            new_block = StoryBlockGraphicsItem()
             new_block.setX(block_data["x"])
             new_block.setY(block_data["y"])
             self.graphScene.addItem(new_block)
@@ -145,13 +145,11 @@ class MainWindow(QMainWindow):
         compile_story_to_html(compileLocation, self.currentStoryPath)
 
     def onSelectionChanged(self):
-        print(self.graphScene)
         selectedItems = self.graphScene.selectedItems()
         if len(selectedItems) == 1:
             self.editor.setBlock(selectedItems[0].data(0))
         else:
             self.editor.setBlock(None)
-
 
     def blockAdded(self, block: StoryBlock):
         self.currentStory.addBlock(block)

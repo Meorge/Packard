@@ -25,14 +25,19 @@ from story_components import StoryBlock
 LINK_RE = compile(r"\[\[(.*?)\]\]")
 
 
-class StoryDocumentBlock(QGraphicsItem):
-    def __init__(self, parent: QGraphicsItem | None = None) -> None:
+class StoryBlockGraphicsItem(QGraphicsItem):
+    def __init__(self, parent: QGraphicsItem | None = None, block: StoryBlock = None) -> None:
         super().__init__(parent)
         self.hoveringOnOutput = False
         self.creatingNewConnection = False
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
+        self.setStoryBlock(block)
+
+    def setStoryBlock(self, block: StoryBlock):
+        self.setData(0, block)
+        self.setPos(block.pos())
 
     def storyBlock(self) -> StoryBlock:
         return self.data(0)
@@ -125,24 +130,3 @@ class StoryDocumentBlock(QGraphicsItem):
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         self.scene().update()
         return super().mouseMoveEvent(event)
-
-    def analyzeBody(self):
-        self.blockConnections.clear()
-        if self.scene() is None:
-            return
-
-        for target_name in LINK_RE.findall(self.body):
-            target_block = self.scene().blocksWithName(target_name)
-            if len(target_block) == 1:
-                self.blockConnections.append(target_block[0])
-            elif len(target_block) <= 0:
-                print(f'Uh oh, there\'s no block with the name "{target_name}"')
-            else:
-                print(
-                    f'Uh oh, there are more than one block with the name "{target_name}"'
-                )
-
-        self.scene().update()
-
-    def setIsStartBlock(self):
-        self.scene().setStartBlock(self)
