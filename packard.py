@@ -1,4 +1,3 @@
-import typing
 from PyQt6.QtWidgets import (
     QMainWindow,
     QApplication,
@@ -7,7 +6,7 @@ from PyQt6.QtWidgets import (
     QDockWidget,
     QFileDialog,
 )
-from PyQt6.QtCore import Qt, QObject
+from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QPainter, QAction, QKeySequence
 from sys import argv
 from block_editor import BlockEditor
@@ -16,20 +15,7 @@ from story_document_block import StoryDocumentBlock
 from saver import load_story, save_story, compile_story_to_html
 from os.path import basename
 
-
-class StoryBlock(QObject):
-    def __init__(self, parent: QObject | None = ...) -> None:
-        super().__init__(parent)
-        self.name: str = ""
-        self.body: str = ""
-
-
-class Story(QObject):
-    def __init__(self, parent: QObject | None = ...) -> None:
-        super().__init__(parent)
-        self.startBlock: StoryBlock = None
-        self.blocks: list[StoryBlock] = []
-
+from story_components import Story, StoryBlock
 
 class MainWindow(QMainWindow):
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -41,7 +27,13 @@ class MainWindow(QMainWindow):
         # all the block data, as well as the one block which is the start
         # block.
 
-        self.graphScene = GraphScene()
+        self.currentStory = Story(self)
+
+        self.graphScene = GraphScene(self, state=self.currentStory)
+
+        self.graphScene.blockAdded.connect(self.blockAdded)
+        self.graphScene.blockRemoved.connect(self.blockRemoved)
+
         self.graphView = QGraphicsView(self.graphScene, parent=self)
         self.graphView.setRenderHints(
             self.graphView.renderHints()
@@ -134,16 +126,12 @@ class MainWindow(QMainWindow):
         self.graphScene.clear()
         for block_data in storyData["blocks"]:
             new_block = StoryDocumentBlock()
-            new_block.setName(block_data["name"])
             new_block.setX(block_data["x"])
             new_block.setY(block_data["y"])
-            new_block.setBody(block_data["body"])
             self.graphScene.addItem(new_block)
 
             if block_data["name"] == storyData["start"]:
                 self.graphScene.setStartBlock(new_block)
-
-        self.graphScene.refreshBlockConnections()
 
         self.setWindowTitle(f"Packard - {basename(self.currentStoryPath)}")
 
@@ -160,10 +148,16 @@ class MainWindow(QMainWindow):
         print(self.graphScene)
         selectedItems = self.graphScene.selectedItems()
         if len(selectedItems) == 1:
-            self.editor.setBlock(selectedItems[0])
+            self.editor.setBlock(selectedItems[0].data(0))
         else:
             self.editor.setBlock(None)
 
+
+    def blockAdded(self, block: StoryBlock):
+        self.currentStory.addBlock(block)
+
+    def blockRemoved(self, block: StoryBlock):
+        self.currentStory.removeBlock(block)
 
 app = QApplication(argv)
 mainWindow = MainWindow()

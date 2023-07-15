@@ -20,6 +20,7 @@ from constants import (
     DROP_SHADOW_PICKUP_RADIUS,
     SELECTED_BLOCK_PEN,
 )
+from story_components import StoryBlock
 
 LINK_RE = compile(r"\[\[(.*?)\]\]")
 
@@ -27,34 +28,14 @@ LINK_RE = compile(r"\[\[(.*?)\]\]")
 class StoryDocumentBlock(QGraphicsItem):
     def __init__(self, parent: QGraphicsItem | None = None) -> None:
         super().__init__(parent)
-        self.name = ""
-        self.body = ""
-        self.__isStartBlock = False
-        self.blockConnections: list[StoryDocumentBlock] = []
-        self.setName("")
-        self.setBody("")
-
         self.hoveringOnOutput = False
-
         self.creatingNewConnection = False
-
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
 
-    def setName(self, text: str):
-        oldName = self.name
-        self.name = text
-        self.updateNameInOtherBlocks(oldName)
-        self.update()
-
-    def setBody(self, text: str):
-        self.body = text
-        self.analyzeBody()
-        self.update()
-
-    def __repr__(self) -> str:
-        return f"StoryDocumentBlock({self.name=})"
+    def storyBlock(self) -> StoryBlock:
+        return self.data(0)
 
     def paint(
         self,
@@ -77,7 +58,7 @@ class StoryDocumentBlock(QGraphicsItem):
         painter.drawText(
             self.blockRect(),
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-            self.name,
+            self.storyBlock().name(),
         )
 
         # Draw the output node
@@ -119,10 +100,6 @@ class StoryDocumentBlock(QGraphicsItem):
         else:
             return super().mousePressEvent(event)
 
-    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        # TODO: find nearest snap point and go there
-        return super().mouseReleaseEvent(event)
-
     def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         if self.outputNodeRect().contains(event.pos()):
             self.hoveringOnOutput = True
@@ -149,9 +126,6 @@ class StoryDocumentBlock(QGraphicsItem):
         self.scene().update()
         return super().mouseMoveEvent(event)
 
-    def connectOutputToBlock(self, target_block: "StoryDocumentBlock"):
-        self.setBody(self.body + "\n" + f"[[{target_block.name}]]")
-
     def analyzeBody(self):
         self.blockConnections.clear()
         if self.scene() is None:
@@ -169,15 +143,6 @@ class StoryDocumentBlock(QGraphicsItem):
                 )
 
         self.scene().update()
-
-    def updateNameInOtherBlocks(self, oldName: str):
-        if self.scene() is None:
-            return
-
-        for block in self.scene().blocks():
-            block: StoryDocumentBlock
-            updated_body = block.body.replace(f"[[{oldName}]]", f"[[{self.name}]]")
-            block.setBody(updated_body)
 
     def setIsStartBlock(self):
         self.scene().setStartBlock(self)
