@@ -3,11 +3,24 @@ from PyQt6.QtWidgets import (
     QGraphicsSceneMouseEvent,
     QGraphicsScene,
 )
-from PyQt6.QtGui import QPainter, QBrush, QPen, QKeyEvent, QPainterPath, QPolygonF, QUndoStack
-from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal
+from PyQt6.QtGui import (
+    QPainter,
+    QBrush,
+    QPen,
+    QKeyEvent,
+    QPainterPath,
+    QPolygonF,
+    QUndoStack,
+)
+from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal, QSizeF
 
-from story_components import SetStoryBlockPosCommand, Story, StoryBlock
-from story_document_block import StoryBlockGraphicsItem
+from story_components import (
+    AddLinkBetweenBlocksCommand,
+    AddStoryBlockWithLinkToExistingBlockCommand,
+    MoveStoryBlocksCommand,
+    Story,
+    StoryBlock,
+)
 
 from constants import (
     CELL_SIZE,
@@ -19,12 +32,18 @@ from constants import (
     TEMP_NEW_BLOCK_COLOR,
     TEMP_NEW_BLOCK_PEN,
     BLOCK_RECT_SIZE,
+    BLOCK_COLOR,
+    OUTPUT_COLOR,
+    OUTPUT_RADIUS,
+    BLOCK_RECT_SIZE,
+    SELECTED_BLOCK_PEN,
 )
 
 
 class GraphScene(QGraphicsScene):
     blockAdded = pyqtSignal(QPointF)
     blockRemoved = pyqtSignal(StoryBlock)
+    blockSelectionChanged = pyqtSignal()
 
     def __init__(self, undoStack: QUndoStack, parent=None, story: Story = None):
         super().__init__(parent)
@@ -33,39 +52,87 @@ class GraphScene(QGraphicsScene):
 
         self.__story = story
         self.__story.stateChanged.connect(self.onStateChanged)
-        # self.__story.stateChanged.connect(self.update)
+        self.__selectedBlocks: list[StoryBlock] = []
+        self.__selectedBlocksInitialPositions: dict = {}
 
-        self.newConnectionTargetBlock: StoryBlockGraphicsItem | None = None
-        self.itemCreatingNewConnection = None
-        self.newConnectionTargetPoint = QPointF(0, 0)
+        self.__mouseDown: bool = False
+        self.__mouseDownPos: QPointF | None = None
+
+        self.__newConnectionSourceBlock: StoryBlock = None
+        self.__newConnectionTargetBlock: StoryBlock = None
+        self.__newConnectionTargetPoint = QPointF(0, 0)
 
     def setStory(self, story: Story):
         self.__story.stateChanged.disconnect(self.onStateChanged)
         self.__story = story
         self.__story.stateChanged.connect(self.onStateChanged)
         self.clear()
-        self.newConnectionTargetBlock = None
-        self.itemCreatingNewConnection = None
-        self.newConnectionTargetPoint = QPointF(0, 0)
-
-        for block in self.__story.blocks():
-            newBlockGraphic = StoryBlockGraphicsItem(block=block)
-            self.addItem(newBlockGraphic)
+        self.__newConnectionSourceBlock = None
+        self.__newConnectionTargetBlock = None
+        self.__newConnectionTargetPoint = QPointF(0, 0)
 
         self.update()
 
+    def selectedBlocks(self) -> list[StoryBlock]:
+        return self.__selectedBlocks.copy()
+    
     def onStateChanged(self):
-        for block in self.blockGraphicsItems():
-            block.setPos(block.storyBlock().pos())
         self.update()
 
-    def getGraphicsItemFromStoryBlock(
-        self, block: StoryBlock
-    ) -> StoryBlockGraphicsItem:
-        for blockGraphicsItem in self.blockGraphicsItems():
-            if blockGraphicsItem.storyBlock() == block:
-                return blockGraphicsItem
-        return None
+    def drawBlock(self, painter: QPainter, block: StoryBlock):
+        painter.setBrush(BLOCK_COLOR)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setPen(
+            SELECTED_BLOCK_PEN
+            if block in self.__selectedBlocks
+            else QPen(Qt.PenStyle.NoPen)
+        )
+        painter.drawRoundedRect(
+            self.blockRect(block),
+            10,
+            10,
+            Qt.SizeMode.AbsoluteSize,
+        )
+
+        painter.setPen(Qt.GlobalColor.white)
+        painter.drawText(
+            self.blockRect(block),
+            Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+            block.name(),
+        )
+
+        painter.drawText(
+            self.blockRect(block),
+            Qt.AlignmentFlag.AlignLeft
+            | Qt.AlignmentFlag.AlignTop
+            | Qt.TextFlag.TextWordWrap,
+            f"{block.pos().x()}, {block.pos().y()}",
+        )
+
+        # Draw the output node
+        painter.setBrush(
+            OUTPUT_COLOR
+        )  # OUTPUT_COLOR.lighter(150 if self.hoveringOnOutput else 100))
+        painter.drawEllipse(self.outputNodeRect(block))
+
+    def blockRect(self, block: StoryBlock) -> QRectF:
+        return QRectF(
+            self.blockBoundingRect(block).x(),
+            self.blockBoundingRect(block).y(),
+            self.blockBoundingRect(block).width() - OUTPUT_RADIUS,
+            self.blockBoundingRect(block).height(),
+        )
+
+    def outputNodeRect(self, block: StoryBlock) -> QRectF:
+        return QRectF(
+            self.blockRect(block).right() - OUTPUT_RADIUS,
+            self.blockRect(block).center().y() - OUTPUT_RADIUS,
+            OUTPUT_RADIUS * 2,
+            OUTPUT_RADIUS * 2,
+        )
+
+    def blockBoundingRect(self, block: StoryBlock) -> QRectF:
+        return QRectF(block.pos(), BLOCK_RECT_SIZE + QSizeF(OUTPUT_RADIUS, 0))
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.setBrush(QBrush(BG_COLOR))
@@ -88,67 +155,100 @@ class GraphScene(QGraphicsScene):
 
         # Draw start block arrow
         if self.__story.startBlock() is not None:
-            startBlockSide = self.getGraphicsItemFromStoryBlock(
-                self.__story.startBlock()
-            ).leftSide()
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
             painter.drawLine(
-                startBlockSide + QPointF(-100, 0), startBlockSide + QPointF(-5, 0)
+                QPointF(
+                    self.blockRect(self.__story.startBlock()).left() - 100,
+                    self.blockRect(self.__story.startBlock()).center().y(),
+                ),
+                QPointF(
+                    self.blockRect(self.__story.startBlock()).left(),
+                    self.blockRect(self.__story.startBlock()).center().y(),
+                ),
             )
-            self.drawArrowhead(painter, startBlockSide)
+            self.drawArrowhead(
+                painter,
+                QPointF(
+                    self.blockRect(self.__story.startBlock()).left(),
+                    self.blockRect(self.__story.startBlock()).center().y(),
+                ),
+            )
 
-        for sourceBlockGraphicsItem in self.blockGraphicsItems():
-            targetBlocks = self.__story.getConnectionsForBlock(
-                sourceBlockGraphicsItem.storyBlock()
-            )
+        # Draw connection arrows
+        for block in self.__story.blocks():
+            targetBlocks = self.__story.getConnectionsForBlock(block)
             for targetBlock in targetBlocks:
                 # Find the graphicsitem that this block goes to
-                targetBlockGraphicsItem = None
-                for blockGraphicsItem in self.blockGraphicsItems():
-                    if blockGraphicsItem.data(0) == targetBlock:
-                        targetBlockGraphicsItem = blockGraphicsItem
-                        break
                 painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
                 painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
 
                 path = QPainterPath()
-                path.moveTo(sourceBlockGraphicsItem.rightSide())
+                path.moveTo(
+                    QPointF(
+                        self.blockRect(block).right(),
+                        self.blockRect(block).center().y(),
+                    )
+                )
                 path.cubicTo(
-                    sourceBlockGraphicsItem.rightSide()
-                    + QPointF(CONNECTION_BEZIER_AMT, 0),
-                    targetBlockGraphicsItem.leftSide()
-                    + QPointF(-CONNECTION_BEZIER_AMT, 0),
-                    targetBlockGraphicsItem.leftSide() + QPointF(-5, 0),
+                    QPointF(
+                        self.blockRect(block).right() + CONNECTION_BEZIER_AMT,
+                        self.blockRect(block).center().y(),
+                    ),
+                    QPointF(
+                        self.blockRect(targetBlock).left() - CONNECTION_BEZIER_AMT,
+                        self.blockRect(targetBlock).center().y(),
+                    ),
+                    QPointF(
+                        self.blockRect(targetBlock).left() - 5,
+                        self.blockRect(targetBlock).center().y(),
+                    ),
                 )
                 painter.drawPath(path)
-                self.drawArrowhead(painter, targetBlockGraphicsItem.leftSide())
+                self.drawArrowhead(
+                    painter,
+                    QPointF(
+                        self.blockRect(targetBlock).left(),
+                        self.blockRect(targetBlock).center().y(),
+                    ),
+                )
 
-        if self.itemCreatingNewConnection is not None:
+        # Draw temporary new connection
+        if self.__newConnectionSourceBlock is not None:
+            block = self.__newConnectionSourceBlock
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
 
             path = QPainterPath()
-            path.moveTo(self.itemCreatingNewConnection.rightSide())
+            path.moveTo(
+                QPointF(
+                    self.blockRect(block).right(),
+                    self.blockRect(block).center().y(),
+                )
+            )
             path.cubicTo(
-                self.itemCreatingNewConnection.rightSide()
-                + QPointF(CONNECTION_BEZIER_AMT, 0),
-                self.newConnectionTargetPoint + QPointF(-CONNECTION_BEZIER_AMT, 0),
-                self.newConnectionTargetPoint + QPointF(-5, 0),
+                QPointF(
+                    self.blockRect(block).right() + CONNECTION_BEZIER_AMT,
+                    self.blockRect(block).center().y(),
+                ),
+                self.__newConnectionTargetPoint + QPointF(-CONNECTION_BEZIER_AMT, 0),
+                self.__newConnectionTargetPoint + QPointF(-5, 0),
             )
             painter.drawPath(path)
 
             # Draw arrowhead
-            self.drawArrowhead(painter, self.newConnectionTargetPoint)
+            self.drawArrowhead(painter, self.__newConnectionTargetPoint)
 
-            if self.newConnectionTargetBlock is None:
+            # If we're not trying to link up to an existing block,
+            # then draw the outline for a new block
+            if self.__newConnectionTargetBlock is None:
                 painter.setBrush(TEMP_NEW_BLOCK_COLOR)
                 painter.setPen(TEMP_NEW_BLOCK_PEN)
                 painter.drawRoundedRect(
                     QRectF(
                         QPointF(
-                            self.newConnectionTargetPoint.x(),
-                            self.newConnectionTargetPoint.y()
+                            self.__newConnectionTargetPoint.x(),
+                            self.__newConnectionTargetPoint.y()
                             - BLOCK_RECT_SIZE.height() / 2,
                         ),
                         BLOCK_RECT_SIZE,
@@ -163,18 +263,23 @@ class GraphScene(QGraphicsScene):
                 painter.drawRoundedRect(
                     QRectF(
                         QPointF(
-                            self.newConnectionTargetBlock.x(),
-                            self.newConnectionTargetBlock.y(),
+                            self.__newConnectionTargetBlock.pos().x(),
+                            self.__newConnectionTargetBlock.pos().y(),
                         ),
-                        self.newConnectionTargetBlock.blockRect().size(),
+                        self.blockRect(self.__newConnectionTargetBlock).size(),
                     ),
                     10,
                     10,
                 )
 
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(Qt.GlobalColor.green)
-        painter.drawRect(self.sceneRect())
+        # painter.setBrush(Qt.BrushStyle.NoBrush)
+        # painter.setPen(Qt.GlobalColor.green)
+        # painter.drawRect(self.sceneRect())
+
+        # Draw all blocks
+        for block in self.__story.blocks():
+            self.drawBlock(painter, block)
+
         return super().drawBackground(painter, rect)
 
     def drawArrowhead(self, painter: QPainter, pos: QPointF):
@@ -189,54 +294,104 @@ class GraphScene(QGraphicsScene):
         painter.setPen(QPen(Qt.PenStyle.NoPen))
         painter.drawPath(arrowheadPath)
 
-    def blockGraphicsItems(self) -> list[StoryBlockGraphicsItem]:
-        return [b for b in self.items() if isinstance(b, StoryBlockGraphicsItem)]
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        self.__mouseDown = True
+        self.__mouseDownPos = event.scenePos()
+        for block in self.__story.blocks():
+            if self.outputNodeRect(block).contains(event.scenePos()):
+                event.accept()
+                self.__newConnectionSourceBlock = block
+                self.__selectedBlocks.clear()
+                self.__selectedBlocksInitialPositions.clear()
+                self.blockSelectionChanged.emit()
+                self.update()
+                return
+
+            elif self.blockRect(block).contains(event.scenePos()):
+                event.accept()
+                self.__selectedBlocks.clear()
+                self.__selectedBlocks.append(block)
+                self.__selectedBlocksInitialPositions[block] = block.pos()
+                self.blockSelectionChanged.emit()
+                self.update()
+                return
+
+        self.__selectedBlocks.clear()
+        self.__selectedBlocksInitialPositions.clear()
+        self.blockSelectionChanged.emit()
+        self.update()
+        return
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        if self.itemCreatingNewConnection is not None:
-            # Check if we're overlapping with an existing block, and if so,
-            # suggest that we connect to that block
-            pos = event.scenePos()
-            overlappingBlocks = [
-                block
-                for block in self.blockGraphicsItems()
-                if block.sceneBoundingRect().contains(pos)
-            ]
-            if len(overlappingBlocks) > 0:
-                self.newConnectionTargetBlock = overlappingBlocks[0]
-                self.newConnectionTargetPoint = self.newConnectionTargetBlock.leftSide()
+        # Drag nodes
+        if self.__mouseDown:
+            # If blocks are selected, and we're dragging them, then we
+            # want to move them
+            if len(self.__selectedBlocks) > 0:
+                delta = event.scenePos() - event.lastScenePos()
+                for block in self.__selectedBlocks:
+                    block.setPos(block.pos() + delta)
+                self.update()
+
             else:
-                self.newConnectionTargetBlock = None
-                self.newConnectionTargetPoint = event.scenePos()
-            self.update()
+                # If we're trying to make a new connection, and hovering
+                # over an existing block, then snap the connection to
+                # that block.
+                if self.__newConnectionSourceBlock is not None:
+                    for block in self.__story.blocks():
+                        if self.blockRect(block).contains(event.scenePos()):
+                            self.__newConnectionTargetBlock = block
+
+                            self.__newConnectionTargetPoint = QPointF(
+                                self.blockRect(block).left(),
+                                self.blockRect(block).center().y(),
+                            )
+                            self.update()
+                            return
+
+                # We're not hovering over a block, so the "ghost" block
+                # should just be wherever the cursor is
+                self.__newConnectionTargetBlock = None
+                self.__newConnectionTargetPoint = event.scenePos()
+                self.update()
+
         return super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        if self.itemCreatingNewConnection is not None:
-            if self.newConnectionTargetBlock is None:
-                newBlockPos = QPointF(
-                    self.newConnectionTargetPoint.x(),
-                    self.newConnectionTargetPoint.y() - CELL_SIZE / 2,
+        self.__mouseDown = False
+
+        # TODO: save mouse down position, and make a command for moving
+        # blocks where it sets their position by the delta amount
+        if len(self.__selectedBlocks) > 0:
+            self.__undoStack.push(
+                MoveStoryBlocksCommand(
+                self.__selectedBlocksInitialPositions.copy(), event.scenePos() - self.__mouseDownPos
                 )
+            )
 
-                # TODO: make this a command!!
-                # newBlock = StoryBlock(pos=newBlockPos)
-
-                # newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
-
-                # self.addItem(newBlockGraphic)
-                self.blockAdded.emit(newBlockPos)
-
-                self.itemCreatingNewConnection.storyBlock().addConnection(newBlock)
-
+        elif self.__newConnectionSourceBlock is not None:
+            if self.__newConnectionTargetBlock is not None:
+                # Don't create a new block; instead, add a link
+                # from the source block to the target block
+                self.__undoStack.push(
+                    AddLinkBetweenBlocksCommand(
+                    self.__newConnectionSourceBlock, self.__newConnectionTargetBlock
+                    )
+                )
             else:
-                self.itemCreatingNewConnection.storyBlock().addConnection(
-                    self.newConnectionTargetBlock.storyBlock()
+                # Create a new block, and link the source block to it
+                self.__undoStack.push(
+                    AddStoryBlockWithLinkToExistingBlockCommand(
+                        self.__story, self.__newConnectionSourceBlock, event.scenePos()
+                    )
                 )
 
-            self.newConnectionTargetPoint = QPointF(0, 0)
-            self.itemCreatingNewConnection = None
-            self.update()
+        self.__selectedBlocksInitialPositions.clear()
+        self.__mouseDownPos = None
+        self.__newConnectionTargetPoint = QPointF(0, 0)
+        self.__newConnectionSourceBlock = None
+        self.__newConnectionTargetBlock = None
+        self.update()
 
         return super().mouseReleaseEvent(event)
 
@@ -253,27 +408,13 @@ class GraphScene(QGraphicsScene):
         # TODO: make this a command!!
         elif event.key() == Qt.Key.Key_Delete:
             for item in self.selectedItems():
-                if not isinstance(item, StoryBlockGraphicsItem):
-                    continue
-
-                self.blockRemoved.emit(item.data(0))
-                self.removeItem(item)
-
+                self.blockRemoved.emit(item)
             self.update()
 
         return super().keyPressEvent(event)
 
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        if self.itemCreatingNewConnection is None:
-            # newBlock = StoryBlock(pos=event.scenePos())
-            # newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
-            # self.addItem(newBlockGraphic)
+        if self.__newConnectionSourceBlock is None:
             self.blockAdded.emit(event.scenePos())
 
         return super().mouseDoubleClickEvent(event)
-
-    def startCreatingNewConnection(self, source: "StoryBlockGraphicsItem"):
-        self.itemCreatingNewConnection = source
-
-    def setStoryBlockPos(self, storyBlock: StoryBlock, newPos: QPointF):
-        self.__undoStack.push(SetStoryBlockPosCommand(storyBlock=storyBlock, newPos=newPos))

@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.graphView)
 
-        self.graphScene.selectionChanged.connect(self.onSelectionChanged)
+        self.graphScene.blockSelectionChanged.connect(self.onSelectionChanged)
 
         # set up editor
         self.editor = BlockEditor(undoStack=self.undoStack, parent=self, story=self.currentStory)
@@ -171,19 +171,17 @@ class MainWindow(QMainWindow):
         compile_story_to_html(compileLocation, self.currentStoryPath)
 
     def onSelectionChanged(self):
-        selectedItems = self.graphScene.selectedItems()
+        selectedItems = self.graphScene.selectedBlocks()
         if len(selectedItems) == 1:
-            self.editor.setBlock(selectedItems[0].data(0))
+            self.editor.setBlock(selectedItems[0])
         else:
             self.editor.setBlock(None)
 
     def blockAdded(self, pos: QPointF):
         self.undoStack.push(AddStoryBlockCommand(self.currentStory, pos))
-        # self.currentStory.addBlock(block)
 
     def blockRemoved(self, block: StoryBlock):
         self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))
-        # self.currentStory.removeBlock(block)
 
 
 app = QApplication(argv)

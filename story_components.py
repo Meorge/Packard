@@ -5,6 +5,7 @@ from time import time
 
 LINK_RE = compile(r"\[\[(.*?)\]\]")
 
+
 class SetStoryBlockNameCommand(QUndoCommand):
     def __init__(self, storyBlock: "StoryBlock", newText: str):
         super().__init__()
@@ -14,10 +15,11 @@ class SetStoryBlockNameCommand(QUndoCommand):
 
     def undo(self):
         self.__storyBlock.setName(self.__oldText)
-    
+
     def redo(self):
         self.__storyBlock.setName(self.__newText)
-    
+
+
 class SetStoryBlockBodyCommand(QUndoCommand):
     def __init__(self, storyBlock: "StoryBlock", newText: str):
         super().__init__()
@@ -27,22 +29,25 @@ class SetStoryBlockBodyCommand(QUndoCommand):
 
     def undo(self):
         self.__storyBlock.setBody(self.__oldText)
-    
+
     def redo(self):
         self.__storyBlock.setBody(self.__newText)
 
-class SetStoryBlockPosCommand(QUndoCommand):
-    def __init__(self, storyBlock: "StoryBlock", newPos: QPointF):
+
+class MoveStoryBlocksCommand(QUndoCommand):
+    def __init__(self, storyBlocks: dict["StoryBlock", QPointF], delta: QPointF):
         super().__init__()
-        self.__storyBlock = storyBlock
-        self.__oldPos = self.__storyBlock.pos()
-        self.__newPos = newPos
+        self.__storyBlocks = storyBlocks
+        self.__delta = delta
 
     def undo(self):
-        self.__storyBlock.setPos(self.__oldPos)
-    
+        for block, initialPos in self.__storyBlocks.items():
+            block.setPos(block.pos() - self.__delta)
+
     def redo(self):
-        self.__storyBlock.setPos(self.__newPos)
+        for block, initialPos in self.__storyBlocks.items():
+            block.setPos(initialPos + self.__delta)
+
 
 class SetStoryStartBlockCommand(QUndoCommand):
     def __init__(self, story: "Story", newStartBlock: "StoryBlock"):
@@ -64,11 +69,45 @@ class AddStoryBlockCommand(QUndoCommand):
         self.__story = story
         self.__block = StoryBlock(pos=pos)
 
-    def undo(self) -> None:
+    def undo(self):
         self.__story.removeBlock(self.__block)
 
-    def redo(self) -> None:
+    def redo(self):
         self.__story.addBlock(self.__block)
+
+
+class AddStoryBlockWithLinkToExistingBlockCommand(QUndoCommand):
+    def __init__(self, story: "Story", sourceBlock: "StoryBlock", pos: QPointF):
+        super().__init__()
+        self.__story = story
+        self.__sourceBlock = sourceBlock
+        self.__newBlock = StoryBlock(pos=pos)
+
+    def undo(self):
+        self.__sourceBlock.setBody(
+            self.__sourceBlock.body()[: -len(f"\n[[{self.__newBlock.name()}]]")]
+        )
+        self.__story.removeBlock(self.__newBlock)
+
+    def redo(self):
+        self.__story.addBlock(self.__newBlock)
+        self.__sourceBlock.addConnection(self.__newBlock)
+
+
+class AddLinkBetweenBlocksCommand(QUndoCommand):
+    def __init__(self, sourceBlock: "StoryBlock", targetBlock: "StoryBlock"):
+        super().__init__()
+        self.__sourceBlock = sourceBlock
+        self.__targetBlock = targetBlock
+
+    def undo(self):
+        self.__sourceBlock.setBody(
+            self.__sourceBlock.body()[: -len(f"\n[[{self.__targetBlock.name()}]]")]
+        )
+
+    def redo(self):
+        self.__sourceBlock.addConnection(self.__targetBlock)
+
 
 class DeleteStoryBlockCommand(QUndoCommand):
     def __init__(self, story: "Story", block: "StoryBlock"):
@@ -82,10 +121,12 @@ class DeleteStoryBlockCommand(QUndoCommand):
     def redo(self) -> None:
         self.__story.removeBlock(self.__block)
 
+
 class StoryBlock(QObject):
     nameChanged = pyqtSignal(object, str)
     bodyChanged = pyqtSignal()
     posChanged = pyqtSignal()
+
     def __init__(
         self,
         parent: QObject | None = None,
@@ -163,7 +204,6 @@ class Story(QObject):
         block.posChanged.connect(self.stateChanged)
         self.__blocks.append(block)
         self.stateChanged.emit()
-
 
     def removeBlock(self, block: StoryBlock):
         block.nameChanged.disconnect(self.updateBlockName)
