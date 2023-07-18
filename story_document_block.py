@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect,
 )
 from PyQt6.QtGui import QPainter, QPen
-from PyQt6.QtCore import QRectF, Qt, QPointF, QSizeF
+from PyQt6.QtCore import QRectF, Qt, QPointF, QSizeF, pyqtSignal, QObject
 from re import compile
 
 from constants import (
@@ -25,7 +25,7 @@ from story_components import StoryBlock
 LINK_RE = compile(r"\[\[(.*?)\]\]")
 
 
-class StoryBlockGraphicsItem(QGraphicsItem):
+class StoryBlockGraphicsItem(QGraphicsItem, QObject):
     def __init__(self, parent: QGraphicsItem | None = None, block: StoryBlock = None) -> None:
         super().__init__(parent)
         self.hoveringOnOutput = False
@@ -36,6 +36,9 @@ class StoryBlockGraphicsItem(QGraphicsItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setStoryBlock(block)
 
+    def scene(self) -> "GraphScene":
+        return super().scene()
+    
     def setStoryBlock(self, block: StoryBlock):
         self.setData(0, block)
         self.setPos(block.pos())
@@ -115,7 +118,9 @@ class StoryBlockGraphicsItem(QGraphicsItem):
         
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if self.lastPos != self.scenePos():
-            self.storyBlock().setPos(self.scenePos())
+            # TODO: make this a signal that the scene picks up on and creates an event for!
+            self.scene().setStoryBlockPos(self.storyBlock(), self.scenePos())
+            # self.storyBlock().setPos(self.scenePos())
             self.lastPos = self.scenePos()
             
         return super().mouseReleaseEvent(event)

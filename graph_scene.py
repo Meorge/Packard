@@ -3,10 +3,10 @@ from PyQt6.QtWidgets import (
     QGraphicsSceneMouseEvent,
     QGraphicsScene,
 )
-from PyQt6.QtGui import QPainter, QBrush, QPen, QKeyEvent, QPainterPath, QPolygonF
+from PyQt6.QtGui import QPainter, QBrush, QPen, QKeyEvent, QPainterPath, QPolygonF, QUndoStack
 from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal
 
-from story_components import Story, StoryBlock
+from story_components import SetStoryBlockPosCommand, Story, StoryBlock
 from story_document_block import StoryBlockGraphicsItem
 
 from constants import (
@@ -23,23 +23,26 @@ from constants import (
 
 
 class GraphScene(QGraphicsScene):
-    blockAdded = pyqtSignal(StoryBlock)
+    blockAdded = pyqtSignal(QPointF)
     blockRemoved = pyqtSignal(StoryBlock)
 
-    def __init__(self, parent=None, story: Story = None):
+    def __init__(self, undoStack: QUndoStack, parent=None, story: Story = None):
         super().__init__(parent)
 
+        self.__undoStack = undoStack
+
         self.__story = story
-        self.__story.stateChanged.connect(self.update)
+        self.__story.stateChanged.connect(self.onStateChanged)
+        # self.__story.stateChanged.connect(self.update)
 
         self.newConnectionTargetBlock: StoryBlockGraphicsItem | None = None
         self.itemCreatingNewConnection = None
         self.newConnectionTargetPoint = QPointF(0, 0)
 
     def setStory(self, story: Story):
-        self.__story.stateChanged.disconnect(self.update)
+        self.__story.stateChanged.disconnect(self.onStateChanged)
         self.__story = story
-        self.__story.stateChanged.connect(self.update)
+        self.__story.stateChanged.connect(self.onStateChanged)
         self.clear()
         self.newConnectionTargetBlock = None
         self.itemCreatingNewConnection = None
@@ -51,6 +54,10 @@ class GraphScene(QGraphicsScene):
 
         self.update()
 
+    def onStateChanged(self):
+        for block in self.blockGraphicsItems():
+            block.setPos(block.storyBlock().pos())
+        self.update()
 
     def getGraphicsItemFromStoryBlock(
         self, block: StoryBlock
@@ -212,12 +219,13 @@ class GraphScene(QGraphicsScene):
                     self.newConnectionTargetPoint.y() - CELL_SIZE / 2,
                 )
 
-                newBlock = StoryBlock(pos=newBlockPos)
+                # TODO: make this a command!!
+                # newBlock = StoryBlock(pos=newBlockPos)
 
-                newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
+                # newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
 
-                self.addItem(newBlockGraphic)
-                self.blockAdded.emit(newBlock)
+                # self.addItem(newBlockGraphic)
+                self.blockAdded.emit(newBlockPos)
 
                 self.itemCreatingNewConnection.storyBlock().addConnection(newBlock)
 
@@ -242,6 +250,7 @@ class GraphScene(QGraphicsScene):
             self.itemCreatingNewConnection = None
             self.update()
 
+        # TODO: make this a command!!
         elif event.key() == Qt.Key.Key_Delete:
             for item in self.selectedItems():
                 if not isinstance(item, StoryBlockGraphicsItem):
@@ -256,12 +265,15 @@ class GraphScene(QGraphicsScene):
 
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if self.itemCreatingNewConnection is None:
-            newBlock = StoryBlock(pos=event.scenePos())
-            newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
-            self.addItem(newBlockGraphic)
-            self.blockAdded.emit(newBlock)
+            # newBlock = StoryBlock(pos=event.scenePos())
+            # newBlockGraphic = StoryBlockGraphicsItem(block=newBlock)
+            # self.addItem(newBlockGraphic)
+            self.blockAdded.emit(event.scenePos())
 
         return super().mouseDoubleClickEvent(event)
 
     def startCreatingNewConnection(self, source: "StoryBlockGraphicsItem"):
         self.itemCreatingNewConnection = source
+
+    def setStoryBlockPos(self, storyBlock: StoryBlock, newPos: QPointF):
+        self.__undoStack.push(SetStoryBlockPosCommand(storyBlock=storyBlock, newPos=newPos))

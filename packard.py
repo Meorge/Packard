@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
 )
 from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import QPainter, QAction, QKeySequence
+from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack
 from sys import argv
 from block_editor import BlockEditor
 from graph_scene import GraphScene
@@ -15,17 +15,18 @@ from story_document_block import StoryBlockGraphicsItem
 from saver import load_story, save_story, compile_story_to_html
 from os.path import basename
 
-from story_components import Story, StoryBlock
+from story_components import AddStoryBlockCommand, DeleteStoryBlockCommand, Story, StoryBlock
 
 
 class MainWindow(QMainWindow):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.undoStack = QUndoStack(self)
         self.currentStoryPath: str | None = None
 
         self.currentStory = Story(self)
 
-        self.graphScene = GraphScene(self, story=self.currentStory)
+        self.graphScene = GraphScene(parent=self, undoStack=self.undoStack, story=self.currentStory)
 
         self.graphScene.blockAdded.connect(self.blockAdded)
         self.graphScene.blockRemoved.connect(self.blockRemoved)
@@ -43,7 +44,7 @@ class MainWindow(QMainWindow):
         self.graphScene.selectionChanged.connect(self.onSelectionChanged)
 
         # set up editor
-        self.editor = BlockEditor(parent=self, story=self.currentStory)
+        self.editor = BlockEditor(undoStack=self.undoStack, parent=self, story=self.currentStory)
         self.onSelectionChanged()
 
         self.editorDockWidget = QDockWidget("Editor")
@@ -78,11 +79,20 @@ class MainWindow(QMainWindow):
             triggered=self.onCompileStory,
         )
 
+
+        self.editMenu = self.menuBar().addMenu("&Edit")
+
+        self.undoAction = self.undoStack.createUndoAction(self)
+        self.redoAction = self.undoStack.createRedoAction(self)
+
         self.fileMenu.addAction(self.saveAction)
         self.fileMenu.addAction(self.saveAsAction)
         self.fileMenu.addAction(self.openAction)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.compileStoryAction)
+
+        self.editMenu.addAction(self.undoAction)
+        self.editMenu.addAction(self.redoAction)
 
         self.setWindowTitle("Packard - Untitled Story")
 
@@ -167,11 +177,13 @@ class MainWindow(QMainWindow):
         else:
             self.editor.setBlock(None)
 
-    def blockAdded(self, block: StoryBlock):
-        self.currentStory.addBlock(block)
+    def blockAdded(self, pos: QPointF):
+        self.undoStack.push(AddStoryBlockCommand(self.currentStory, pos))
+        # self.currentStory.addBlock(block)
 
     def blockRemoved(self, block: StoryBlock):
-        self.currentStory.removeBlock(block)
+        self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))
+        # self.currentStory.removeBlock(block)
 
 
 app = QApplication(argv)
