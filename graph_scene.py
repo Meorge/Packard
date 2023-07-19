@@ -17,6 +17,7 @@ from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal, QSizeF
 from story_components import (
     AddLinkBetweenBlocksCommand,
     AddStoryBlockWithLinkToExistingBlockCommand,
+    DeleteStoryBlockCommand,
     MoveStoryBlocksCommand,
     Story,
     StoryBlock,
@@ -360,9 +361,9 @@ class GraphScene(QGraphicsScene):
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         self.__mouseDown = False
 
-        # TODO: save mouse down position, and make a command for moving
+        # Save mouse down position, and make a command for moving
         # blocks where it sets their position by the delta amount
-        if len(self.__selectedBlocks) > 0:
+        if len(self.__selectedBlocks) > 0 and event.scenePos() != self.__mouseDownPos:
             self.__undoStack.push(
                 MoveStoryBlocksCommand(
                 self.__selectedBlocksInitialPositions.copy(), event.scenePos() - self.__mouseDownPos
@@ -407,8 +408,9 @@ class GraphScene(QGraphicsScene):
 
         # TODO: make this a command!!
         elif event.key() == Qt.Key.Key_Delete:
-            for item in self.selectedItems():
-                self.blockRemoved.emit(item)
+            self.__undoStack.push(
+                DeleteStoryBlockCommand(self.__story, self.__selectedBlocks.copy())
+            )
             self.update()
 
         return super().keyPressEvent(event)

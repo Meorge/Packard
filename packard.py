@@ -83,7 +83,9 @@ class MainWindow(QMainWindow):
         self.editMenu = self.menuBar().addMenu("&Edit")
 
         self.undoAction = self.undoStack.createUndoAction(self)
+        self.undoAction.setShortcut(QKeySequence.StandardKey.Undo)
         self.redoAction = self.undoStack.createRedoAction(self)
+        self.redoAction.setShortcut(QKeySequence.StandardKey.Redo)
 
         self.fileMenu.addAction(self.saveAction)
         self.fileMenu.addAction(self.saveAsAction)
@@ -158,6 +160,7 @@ class MainWindow(QMainWindow):
         self.currentStoryPath = openLocation
 
         self.graphScene.setStory(self.currentStory)
+        self.editor.setStory(self.currentStory)
 
         self.setWindowTitle(f"Packard - {basename(self.currentStoryPath)}")
 

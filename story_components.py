@@ -37,6 +37,7 @@ class SetStoryBlockBodyCommand(QUndoCommand):
 class MoveStoryBlocksCommand(QUndoCommand):
     def __init__(self, storyBlocks: dict["StoryBlock", QPointF], delta: QPointF):
         super().__init__()
+        self.setText(f"Move Block" if len(storyBlocks) == 1 else f"Move {len(storyBlocks)} Blocks")
         self.__storyBlocks = storyBlocks
         self.__delta = delta
 
@@ -52,6 +53,7 @@ class MoveStoryBlocksCommand(QUndoCommand):
 class SetStoryStartBlockCommand(QUndoCommand):
     def __init__(self, story: "Story", newStartBlock: "StoryBlock"):
         super().__init__()
+        self.setText("Set Start Block")
         self.__story = story
         self.__oldBlock = self.__story.startBlock()
         self.__newBlock = newStartBlock
@@ -66,6 +68,7 @@ class SetStoryStartBlockCommand(QUndoCommand):
 class AddStoryBlockCommand(QUndoCommand):
     def __init__(self, story: "Story", pos: QPointF):
         super().__init__()
+        self.setText("Add Block")
         self.__story = story
         self.__block = StoryBlock(pos=pos)
 
@@ -79,6 +82,7 @@ class AddStoryBlockCommand(QUndoCommand):
 class AddStoryBlockWithLinkToExistingBlockCommand(QUndoCommand):
     def __init__(self, story: "Story", sourceBlock: "StoryBlock", pos: QPointF):
         super().__init__()
+        self.setText("Add and Connect Block")
         self.__story = story
         self.__sourceBlock = sourceBlock
         self.__newBlock = StoryBlock(pos=pos)
@@ -97,6 +101,7 @@ class AddStoryBlockWithLinkToExistingBlockCommand(QUndoCommand):
 class AddLinkBetweenBlocksCommand(QUndoCommand):
     def __init__(self, sourceBlock: "StoryBlock", targetBlock: "StoryBlock"):
         super().__init__()
+        self.setText("Link Blocks")
         self.__sourceBlock = sourceBlock
         self.__targetBlock = targetBlock
 
@@ -110,16 +115,19 @@ class AddLinkBetweenBlocksCommand(QUndoCommand):
 
 
 class DeleteStoryBlockCommand(QUndoCommand):
-    def __init__(self, story: "Story", block: "StoryBlock"):
+    def __init__(self, story: "Story", blocks: list["StoryBlock"]):
         super().__init__()
+        self.setText("Delete Block")
         self.__story = story
-        self.__block = block
+        self.__blocks = blocks
 
     def undo(self) -> None:
-        self.__story.addBlock(self.__block)
+        for b in self.__blocks:
+            self.__story.addBlock(b)
 
     def redo(self) -> None:
-        self.__story.removeBlock(self.__block)
+        for b in self.__blocks:
+            self.__story.removeBlock(b)
 
 
 class StoryBlock(QObject):

@@ -1,6 +1,6 @@
 from PyQt6.QtCore import QSignalBlocker
 from PyQt6.QtWidgets import QWidget, QLineEdit, QTextEdit, QVBoxLayout, QPushButton
-from PyQt6.QtGui import QUndoStack
+from PyQt6.QtGui import QUndoStack, QUndoCommand
 from story_components import (
     SetStoryBlockBodyCommand,
     SetStoryBlockNameCommand,
@@ -17,10 +17,10 @@ class BlockEditor(QWidget):
         super().__init__(parent)
 
         self.__undoStack = undoStack
-        self.__story = story
+        self.__story: Story = None
 
         self.titleField = QLineEdit(parent=self)
-        self.titleField.textChanged.connect(self.blockTitleChanged)
+        self.titleField.textEdited.connect(self.blockTitleChanged)
 
         self.isStartBlockField = QPushButton("Make Start Node")
         self.isStartBlockField.clicked.connect(self.blockStartChanged)
@@ -34,11 +34,19 @@ class BlockEditor(QWidget):
         self.layout().addWidget(self.isStartBlockField)
         self.layout().addWidget(self.bodyField)
 
+        self.setStory(story)
+
     def setStory(self, story: Story):
+        # if self.__story is not None:
+        #     self.__story.stateChanged.disconnect(self.updateContents)
         self.__story = story
+        # self.__story.stateChanged.connect(self.updateContents)
 
     def setBlock(self, block: StoryBlock):
         self.currentBlock = block
+        self.updateContents()
+
+    def updateContents(self):
         if self.currentBlock is not None:
             self.setEnabled(True)
 
@@ -59,10 +67,8 @@ class BlockEditor(QWidget):
 
     def blockTitleChanged(self):
         if self.currentBlock is None:
-            return
-        self.__undoStack.push(
-            SetStoryBlockNameCommand(self.currentBlock, self.titleField.text())
-        )
+            return 
+        self.currentBlock.setName(self.titleField.text())
 
     def blockStartChanged(self):
         if self.currentBlock is None:
@@ -74,6 +80,4 @@ class BlockEditor(QWidget):
     def blockBodyChanged(self):
         if self.currentBlock is None:
             return
-        self.__undoStack.push(
-            SetStoryBlockBodyCommand(self.currentBlock, self.bodyField.toPlainText())
-        )
+        self.currentBlock.setBody(self.bodyField.toPlainText())
