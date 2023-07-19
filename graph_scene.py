@@ -12,7 +12,7 @@ from PyQt6.QtGui import (
     QPolygonF,
     QUndoStack,
 )
-from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal, QSizeF
+from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal, QSizeF, QMarginsF
 
 from story_components import (
     AddLinkBetweenBlocksCommand,
@@ -51,6 +51,8 @@ class GraphScene(QGraphicsScene):
 
         self.__undoStack = undoStack
 
+        self.setSceneRect(-10000/2, -10000/2, 10000, 10000)
+
         self.__story = story
         self.__story.stateChanged.connect(self.onStateChanged)
         self.__selectedBlocks: list[StoryBlock] = []
@@ -71,13 +73,18 @@ class GraphScene(QGraphicsScene):
         self.__newConnectionSourceBlock = None
         self.__newConnectionTargetBlock = None
         self.__newConnectionTargetPoint = QPointF(0, 0)
-
-        self.update()
+        self.onStateChanged()
 
     def selectedBlocks(self) -> list[StoryBlock]:
         return self.__selectedBlocks.copy()
     
     def onStateChanged(self):
+        # totalRect = QRectF()
+        # for blockRect in [self.blockRect(b) for b in self.__story.blocks()]:
+        #     totalRect = totalRect.united(blockRect)
+        # totalRect = totalRect.marginsAdded(QMarginsF(500, 500, 500, 500))
+
+        # self.setSceneRect(totalRect)
         self.update()
 
     def drawBlock(self, painter: QPainter, block: StoryBlock):
