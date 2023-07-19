@@ -11,6 +11,7 @@ from PyQt6.QtGui import (
     QPainterPath,
     QPolygonF,
     QUndoStack,
+    QColor
 )
 from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal, QSizeF, QMarginsF
 
@@ -51,7 +52,8 @@ class GraphScene(QGraphicsScene):
 
         self.__undoStack = undoStack
 
-        self.setSceneRect(-10000/2, -10000/2, 10000, 10000)
+        SCENE_SIZE = 10000
+        self.setSceneRect(0, 0, SCENE_SIZE, SCENE_SIZE)
 
         self.__story = story
         self.__story.stateChanged.connect(self.onStateChanged)
@@ -63,7 +65,7 @@ class GraphScene(QGraphicsScene):
 
         self.__newConnectionSourceBlock: StoryBlock = None
         self.__newConnectionTargetBlock: StoryBlock = None
-        self.__newConnectionTargetPoint = QPointF(0, 0)
+        self.__newConnectionTargetPoint: QPointF | None = None
 
     def setStory(self, story: Story):
         self.__story.stateChanged.disconnect(self.onStateChanged)
@@ -72,7 +74,7 @@ class GraphScene(QGraphicsScene):
         self.clear()
         self.__newConnectionSourceBlock = None
         self.__newConnectionTargetBlock = None
-        self.__newConnectionTargetPoint = QPointF(0, 0)
+        self.__newConnectionTargetPoint = None
         self.onStateChanged()
 
     def selectedBlocks(self) -> list[StoryBlock]:
@@ -83,11 +85,17 @@ class GraphScene(QGraphicsScene):
         # for blockRect in [self.blockRect(b) for b in self.__story.blocks()]:
         #     totalRect = totalRect.united(blockRect)
         # totalRect = totalRect.marginsAdded(QMarginsF(500, 500, 500, 500))
-
         # self.setSceneRect(totalRect)
         self.update()
 
     def drawBlock(self, painter: QPainter, block: StoryBlock):
+        # Draw the output node
+        painter.setBrush(
+            OUTPUT_COLOR
+        )
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(self.outputNodeRect(block))
+
         painter.setBrush(BLOCK_COLOR)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setPen(
@@ -106,22 +114,14 @@ class GraphScene(QGraphicsScene):
         painter.drawText(
             self.blockRect(block),
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-            block.name(),
+            block.title(),
         )
 
+        painter.setPen(QColor(255, 255, 255, 128))
         painter.drawText(
-            self.blockRect(block),
-            Qt.AlignmentFlag.AlignLeft
-            | Qt.AlignmentFlag.AlignTop
-            | Qt.TextFlag.TextWordWrap,
+            self.blockRect(block).topLeft() - QPointF(0, 8),
             f"{block.pos().x()}, {block.pos().y()}",
         )
-
-        # Draw the output node
-        painter.setBrush(
-            OUTPUT_COLOR
-        )  # OUTPUT_COLOR.lighter(150 if self.hoveringOnOutput else 100))
-        painter.drawEllipse(self.outputNodeRect(block))
 
     def blockRect(self, block: StoryBlock) -> QRectF:
         return QRectF(
@@ -222,7 +222,7 @@ class GraphScene(QGraphicsScene):
                 )
 
         # Draw temporary new connection
-        if self.__newConnectionSourceBlock is not None:
+        if self.__newConnectionSourceBlock is not None and self.__newConnectionTargetPoint is not None:
             block = self.__newConnectionSourceBlock
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(CONNECTION_COLOR, CONNECTION_WIDTH))
@@ -234,6 +234,7 @@ class GraphScene(QGraphicsScene):
                     self.blockRect(block).center().y(),
                 )
             )
+
             path.cubicTo(
                 QPointF(
                     self.blockRect(block).right() + CONNECTION_BEZIER_AMT,
@@ -249,7 +250,7 @@ class GraphScene(QGraphicsScene):
 
             # If we're not trying to link up to an existing block,
             # then draw the outline for a new block
-            if self.__newConnectionTargetBlock is None:
+            if self.__newConnectionTargetBlock is None and self.__newConnectionTargetPoint is not None:
                 painter.setBrush(TEMP_NEW_BLOCK_COLOR)
                 painter.setPen(TEMP_NEW_BLOCK_PEN)
                 painter.drawRoundedRect(
@@ -390,13 +391,13 @@ class GraphScene(QGraphicsScene):
                 # Create a new block, and link the source block to it
                 self.__undoStack.push(
                     AddStoryBlockWithLinkToExistingBlockCommand(
-                        self.__story, self.__newConnectionSourceBlock, event.scenePos()
+                        self.__story, self.__newConnectionSourceBlock, event.scenePos() - QPointF(0, BLOCK_RECT_SIZE.height() / 2)
                     )
                 )
 
         self.__selectedBlocksInitialPositions.clear()
         self.__mouseDownPos = None
-        self.__newConnectionTargetPoint = QPointF(0, 0)
+        self.__newConnectionTargetPoint = None
         self.__newConnectionSourceBlock = None
         self.__newConnectionTargetBlock = None
         self.update()

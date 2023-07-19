@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
         self.editorDockWidget = QDockWidget("Editor")
         self.editorDockWidget.setWidget(self.editor)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.editorDockWidget)
-
+        
         # menu bar
         self.fileMenu = self.menuBar().addMenu("&File")
 
@@ -96,22 +96,24 @@ class MainWindow(QMainWindow):
         self.editMenu.addAction(self.undoAction)
         self.editMenu.addAction(self.redoAction)
 
-        self.setWindowTitle("Packard - Untitled Story")
+        self.updateWindowTitle()
 
     def onSave(self):
         if self.currentStoryPath is None:
             self.onSaveAs()
             return
         save_story(self.currentStoryPath, self.storyObjectToDict())
+        self.currentStory.resetModified()
 
     def storyObjectToDict(self):
         return {
-            "start": self.currentStory.startBlock().name(),
+            "start": self.currentStory.startBlock().id(),
             "blocks": [
                 {
                     "x": block.pos().x(),
                     "y": block.pos().y(),
-                    "name": block.name(),
+                    "title": block.title(),
+                    "id": block.id(),
                     "body": block.body(),
                 }
                 for block in self.currentStory.blocks()
@@ -131,7 +133,8 @@ class MainWindow(QMainWindow):
 
         self.currentStoryPath = saveLocation
 
-        self.setWindowTitle(f"Packard - {basename(self.currentStoryPath)}")
+        self.currentStory.resetModified()
+        self.updateWindowTitle()
 
     def onOpen(self):
         openLocation = QFileDialog.getExistingDirectory(self, "Open Story...")
@@ -145,12 +148,13 @@ class MainWindow(QMainWindow):
         startBlock = None
         for blockData in storyData["blocks"]:
             newBlock = StoryBlock(
-                name=blockData["name"],
+                title=blockData["title"],
                 body=blockData["body"],
+                id=blockData["id"],
                 pos=QPointF(blockData["x"], blockData["y"]),
             )
             blocks.append(newBlock)
-            if blockData["name"] == storyData["start"]:
+            if blockData["id"] == storyData["start"]:
                 startBlock = newBlock
 
         newStory = Story(startBlock=startBlock, blocks=blocks)
@@ -162,7 +166,7 @@ class MainWindow(QMainWindow):
         self.graphScene.setStory(self.currentStory)
         self.editor.setStory(self.currentStory)
 
-        self.setWindowTitle(f"Packard - {basename(self.currentStoryPath)}")
+        self.updateWindowTitle()
 
     def onCompileStory(self):
         compileLocation = QFileDialog.getExistingDirectory(self, "Compile Story...")
@@ -172,6 +176,13 @@ class MainWindow(QMainWindow):
 
         self.onSave()
         compile_story_to_html(compileLocation, self.currentStoryPath)
+
+    def updateWindowTitle(self):
+        title = "Packard - "
+        title += basename(self.currentStoryPath) if self.currentStoryPath is not None else "Untitled Story"
+        if self.currentStory.modified():
+            title += " (Unsaved)"
+        self.setWindowTitle(title)
 
     def onSelectionChanged(self):
         selectedItems = self.graphScene.selectedBlocks()

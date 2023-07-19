@@ -3,21 +3,21 @@ from PyQt6.QtCore import QObject, QPointF, pyqtSignal
 from re import compile
 from time import time
 
-LINK_RE = compile(r"\[\[(.*?)\]\]")
+LINK_RE = compile(r"\[\[(.*?)->(.*?)\]\]")
 
 
 class SetStoryBlockNameCommand(QUndoCommand):
     def __init__(self, storyBlock: "StoryBlock", newText: str):
         super().__init__()
         self.__storyBlock = storyBlock
-        self.__oldText = self.__storyBlock.name()
+        self.__oldText = self.__storyBlock.title()
         self.__newText = newText
 
     def undo(self):
-        self.__storyBlock.setName(self.__oldText)
+        self.__storyBlock.setTitle(self.__oldText)
 
     def redo(self):
-        self.__storyBlock.setName(self.__newText)
+        self.__storyBlock.setTitle(self.__newText)
 
 
 class SetStoryBlockBodyCommand(QUndoCommand):
@@ -89,7 +89,7 @@ class AddStoryBlockWithLinkToExistingBlockCommand(QUndoCommand):
 
     def undo(self):
         self.__sourceBlock.setBody(
-            self.__sourceBlock.body()[: -len(f"\n[[{self.__newBlock.name()}]]")]
+            self.__sourceBlock.body()[: -len(f"\n[[{self.__newBlock.title()}]]")]
         )
         self.__story.removeBlock(self.__newBlock)
 
@@ -107,7 +107,7 @@ class AddLinkBetweenBlocksCommand(QUndoCommand):
 
     def undo(self):
         self.__sourceBlock.setBody(
-            self.__sourceBlock.body()[: -len(f"\n[[{self.__targetBlock.name()}]]")]
+            self.__sourceBlock.body()[: -len(f"\n[[{self.__targetBlock.title()}]]")]
         )
 
     def redo(self):
@@ -131,24 +131,27 @@ class DeleteStoryBlockCommand(QUndoCommand):
 
 
 class StoryBlock(QObject):
-    nameChanged = pyqtSignal(object, str)
+    titleChanged = pyqtSignal(object, str)
+    idChanged = pyqtSignal(object, str)
     bodyChanged = pyqtSignal()
     posChanged = pyqtSignal()
 
     def __init__(
         self,
         parent: QObject | None = None,
-        name: str | None = None,
+        title: str | None = None,
+        id: str | None = None,
         body: str | None = None,
         pos: QPointF | None = None,
     ) -> None:
         super().__init__(parent)
-        self.__name: str = name if name is not None else str(int(time()))
+        self.__title: str = title if title is not None else "Untitled Passage"
+        self.__id: str = id if id is not None else str(int(time()))
         self.__body: str = body if body is not None else ""
         self.__pos: QPointF = pos if pos is not None else QPointF()
 
     def __repr__(self) -> str:
-        return f'<StoryBlock name="{self.__name}">'
+        return f'<StoryBlock title="{self.__title}" id="{self.__id}">'
 
     def setPos(self, pos: QPointF):
         self.__pos = pos
@@ -157,13 +160,21 @@ class StoryBlock(QObject):
     def pos(self) -> QPointF:
         return self.__pos
 
-    def setName(self, name: str):
-        oldName = self.__name
-        self.__name = name
-        self.nameChanged.emit(self, oldName)
+    def setTitle(self, name: str):
+        oldName = self.__title
+        self.__title = name
+        self.titleChanged.emit(self, oldName)
 
-    def name(self) -> str:
-        return self.__name
+    def title(self) -> str:
+        return self.__title
+    
+    def setId(self, id: str):
+        oldId = self.__id
+        self.__id = id
+        self.idChanged.emit(self, oldId)
+
+    def id(self) -> str:
+        return self.__id
 
     def setBody(self, body: str):
         self.__body = body
@@ -173,7 +184,7 @@ class StoryBlock(QObject):
         return self.__body
 
     def addConnection(self, targetBlock: "StoryBlock"):
-        self.setBody(self.body() + "\n" + f"[[{targetBlock.name()}]]")
+        self.setBody(self.body() + "\n" + f"[[{targetBlock.id()}]]")
 
 
 class Story(QObject):
@@ -188,12 +199,35 @@ class Story(QObject):
         super().__init__(parent)
         self.__startBlock: StoryBlock = startBlock
         self.__blocks: list[StoryBlock] = blocks if blocks is not None else []
+        self.__modified: bool = False
         if len(self.__blocks) > 0:
             for block in self.__blocks:
                 block.setParent(self)
-                block.nameChanged.connect(self.updateBlockName)
-                block.bodyChanged.connect(self.stateChanged)
-                block.posChanged.connect(self.stateChanged)
+                self.makeBlockConnections(block)
+
+    def resetModified(self):
+        self.__modified = False
+
+    def modified(self) -> bool:
+        return self.__modified
+    
+    def onStateChanged(self):
+        self.__modified = True
+        self.stateChanged.emit()
+
+    def makeBlockConnections(self, block: StoryBlock):
+        block.setParent(self)
+        block.titleChanged.connect(self.stateChanged)
+        block.idChanged.connect(self.updateBlockId)
+        block.bodyChanged.connect(self.stateChanged)
+        block.posChanged.connect(self.stateChanged)
+
+    def disconnectBlockSignals(self, block: StoryBlock):
+        block.setParent(None)
+        block.titleChanged.disconnect(self.stateChanged)
+        block.idChanged.disconnect(self.updateBlockId)
+        block.bodyChanged.disconnect(self.stateChanged)
+        block.posChanged.disconnect(self.stateChanged)
 
     def setStartBlock(self, block: StoryBlock):
         self.__startBlock = block
@@ -206,43 +240,36 @@ class Story(QObject):
         return self.__blocks.copy()
 
     def addBlock(self, block: StoryBlock):
-        block.setParent(self)
-        block.nameChanged.connect(self.updateBlockName)
-        block.bodyChanged.connect(self.stateChanged)
-        block.posChanged.connect(self.stateChanged)
+        self.makeBlockConnections(block)
         self.__blocks.append(block)
+
+        if len(self.__blocks) == 1:
+            self.setStartBlock(block)
+
         self.stateChanged.emit()
 
     def removeBlock(self, block: StoryBlock):
-        block.nameChanged.disconnect(self.updateBlockName)
-        block.bodyChanged.disconnect(self.stateChanged)
-        block.posChanged.disconnect(self.stateChanged)
+        self.disconnectBlockSignals(block)
         self.__blocks.remove(block)
         if self.__startBlock == block:
             self.__startBlock = None
         self.stateChanged.emit()
 
-    def updateBlockName(self, block: StoryBlock, oldName: str):
+    def updateBlockId(self, block: StoryBlock, oldId: str):
         for otherBlock in self.__blocks:
             otherBlock.setBody(
-                otherBlock.body().replace(f"[[{oldName}]]", f"[[{block.name()}]]")
+                otherBlock.body().replace(f"[[{oldId}]]", f"[[{block.id()}]]")
             )
         self.stateChanged.emit()
 
-    def blockWithName(self, name: str):
-        for block in self.__blocks:
-            if block.name() == name:
-                return block
-        return None
-
     def getConnectionsForBlock(self, block: StoryBlock) -> list[StoryBlock]:
         connections: list[StoryBlock] = []
-        for targetBlockName in LINK_RE.findall(block.body()):
-            targetBlocks = [b for b in self.blocks() if b.name() == targetBlockName]
+        for _, targetBlockId in LINK_RE.findall(block.body()):
+            targetBlocks = [b for b in self.blocks() if b.id() == targetBlockId]
             if len(targetBlocks) == 1:
                 connections.append(targetBlocks[0])
             elif len(targetBlocks) <= 0:
-                print(f'No blocks with name "{targetBlockName}"')
+                print(f'No blocks with ID "{targetBlockId}"')
             else:
-                print(f'Multiple blocks with name "{targetBlockName}"')
+                print(f'Multiple blocks with ID "{targetBlockId}"')
         return connections

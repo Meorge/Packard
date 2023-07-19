@@ -68,7 +68,7 @@ class StoryBlockGraphicsItem(QGraphicsItem, QObject):
         painter.drawText(
             self.blockRect(),
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-            self.storyBlock().name(),
+            self.storyBlock().title(),
         )
 
         painter.drawText(

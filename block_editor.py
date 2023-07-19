@@ -22,6 +22,10 @@ class BlockEditor(QWidget):
         self.titleField = QLineEdit(parent=self)
         self.titleField.textEdited.connect(self.blockTitleChanged)
 
+        self.idField = QLineEdit(parent=self)
+        self.idField.setPlaceholderText("Page ID")
+        self.idField.textEdited.connect(self.blockIdChanged)
+
         self.isStartBlockField = QPushButton("Make Start Node")
         self.isStartBlockField.clicked.connect(self.blockStartChanged)
 
@@ -31,6 +35,7 @@ class BlockEditor(QWidget):
 
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.titleField)
+        self.layout().addWidget(self.idField)
         self.layout().addWidget(self.isStartBlockField)
         self.layout().addWidget(self.bodyField)
 
@@ -48,7 +53,10 @@ class BlockEditor(QWidget):
             self.setEnabled(True)
 
             with QSignalBlocker(self.titleField) as _:
-                self.titleField.setText(self.currentBlock.name())
+                self.titleField.setText(self.currentBlock.title())
+
+            with QSignalBlocker(self.idField) as _:
+                self.idField.setText(self.currentBlock.id())
 
             with QSignalBlocker(self.bodyField) as _:
                 self.bodyField.setPlainText(self.currentBlock.body())
@@ -59,13 +67,21 @@ class BlockEditor(QWidget):
             with QSignalBlocker(self.titleField) as _:
                 self.titleField.setText("")
 
+            with QSignalBlocker(self.idField) as _:
+                self.idField.setText("")
+
             with QSignalBlocker(self.bodyField) as _:
                 self.bodyField.setPlainText("")
 
     def blockTitleChanged(self):
         if self.currentBlock is None:
             return 
-        self.currentBlock.setName(self.titleField.text())
+        self.currentBlock.setTitle(self.titleField.text())
+
+    def blockIdChanged(self):
+        if self.currentBlock is None:
+            return
+        self.currentBlock.setId(self.idField.text())
 
     def blockStartChanged(self):
         if self.currentBlock is None:
