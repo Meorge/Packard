@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QSignalBlocker
-from PyQt6.QtWidgets import QWidget, QLineEdit, QTextEdit, QVBoxLayout, QPushButton
+from PyQt6.QtWidgets import QWidget, QLineEdit, QTextEdit, QPlainTextEdit, QVBoxLayout, QPushButton
 from PyQt6.QtGui import QUndoStack, QUndoCommand
 from story_components import (
     SetStoryBlockBodyCommand,
@@ -25,8 +25,8 @@ class BlockEditor(QWidget):
         self.isStartBlockField = QPushButton("Make Start Node")
         self.isStartBlockField.clicked.connect(self.blockStartChanged)
 
-        self.bodyField = QTextEdit(parent=self)
-        self.bodyField.setAcceptRichText(False)
+        self.bodyField = QPlainTextEdit(parent=self)
+        # self.bodyField.setAcceptRichText(False)
         self.bodyField.textChanged.connect(self.blockBodyChanged)
 
         self.setLayout(QVBoxLayout())
@@ -37,10 +37,7 @@ class BlockEditor(QWidget):
         self.setStory(story)
 
     def setStory(self, story: Story):
-        # if self.__story is not None:
-        #     self.__story.stateChanged.disconnect(self.updateContents)
         self.__story = story
-        # self.__story.stateChanged.connect(self.updateContents)
 
     def setBlock(self, block: StoryBlock):
         self.currentBlock = block
@@ -54,7 +51,7 @@ class BlockEditor(QWidget):
                 self.titleField.setText(self.currentBlock.name())
 
             with QSignalBlocker(self.bodyField) as _:
-                self.bodyField.setText(self.currentBlock.body())
+                self.bodyField.setPlainText(self.currentBlock.body())
 
         else:
             self.setEnabled(False)
@@ -63,7 +60,7 @@ class BlockEditor(QWidget):
                 self.titleField.setText("")
 
             with QSignalBlocker(self.bodyField) as _:
-                self.bodyField.setText("")
+                self.bodyField.setPlainText("")
 
     def blockTitleChanged(self):
         if self.currentBlock is None:
