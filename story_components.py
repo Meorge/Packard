@@ -1,6 +1,6 @@
 from PyQt6.QtGui import QUndoCommand
 from PyQt6.QtCore import QObject, QPointF, pyqtSignal
-from re import compile
+from re import compile, escape
 from time import time
 
 LINK_RE = compile(r"\[\[(.*?)->(.*?)\]\]")
@@ -184,7 +184,7 @@ class StoryBlock(QObject):
         return self.__body
 
     def addConnection(self, targetBlock: "StoryBlock"):
-        self.setBody(self.body() + "\n" + f"[[{targetBlock.id()}]]")
+        self.setBody(self.body() + "\n" + f"[[{targetBlock.title()}->{targetBlock.id()}]]")
 
 
 class Story(QObject):
@@ -200,6 +200,7 @@ class Story(QObject):
         self.__startBlock: StoryBlock = startBlock
         self.__blocks: list[StoryBlock] = blocks if blocks is not None else []
         self.__modified: bool = False
+        self.stateChanged.connect(self.onStateChanged)
         if len(self.__blocks) > 0:
             for block in self.__blocks:
                 block.setParent(self)
@@ -213,7 +214,6 @@ class Story(QObject):
     
     def onStateChanged(self):
         self.__modified = True
-        self.stateChanged.emit()
 
     def makeBlockConnections(self, block: StoryBlock):
         block.setParent(self)
@@ -256,9 +256,10 @@ class Story(QObject):
         self.stateChanged.emit()
 
     def updateBlockId(self, block: StoryBlock, oldId: str):
+        b = compile(r"\[\[(.*?)->" + escape(oldId) + r"\]\]")
         for otherBlock in self.__blocks:
             otherBlock.setBody(
-                otherBlock.body().replace(f"[[{oldId}]]", f"[[{block.id()}]]")
+                b.sub(r"[[\1->" + block.id().replace('\\', r'\\') + r"]]", otherBlock.body())
             )
         self.stateChanged.emit()
 

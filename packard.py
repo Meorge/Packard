@@ -1,3 +1,4 @@
+from PyQt6 import QtGui
 from PyQt6.QtWidgets import (
     QMainWindow,
     QApplication,
@@ -5,9 +6,10 @@ from PyQt6.QtWidgets import (
     QWidget,
     QDockWidget,
     QFileDialog,
+    QMessageBox
 )
 from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack
+from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack, QCloseEvent
 from sys import argv
 from block_editor import BlockEditor
 from graph_scene import GraphScene
@@ -25,6 +27,7 @@ class MainWindow(QMainWindow):
         self.currentStoryPath: str | None = None
 
         self.currentStory = Story(self)
+        self.currentStory.stateChanged.connect(self.updateWindowTitle)
 
         self.graphScene = GraphScene(parent=self, undoStack=self.undoStack, story=self.currentStory)
 
@@ -50,7 +53,7 @@ class MainWindow(QMainWindow):
         self.editorDockWidget = QDockWidget("Editor")
         self.editorDockWidget.setWidget(self.editor)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.editorDockWidget)
-        
+
         # menu bar
         self.fileMenu = self.menuBar().addMenu("&File")
 
@@ -98,12 +101,12 @@ class MainWindow(QMainWindow):
 
         self.updateWindowTitle()
 
-    def onSave(self):
+    def onSave(self) -> bool:
         if self.currentStoryPath is None:
-            self.onSaveAs()
-            return
+            return self.onSaveAs()
         save_story(self.currentStoryPath, self.storyObjectToDict())
         self.currentStory.resetModified()
+        return True
 
     def storyObjectToDict(self):
         return {
@@ -120,11 +123,11 @@ class MainWindow(QMainWindow):
             ],
         }
 
-    def onSaveAs(self):
+    def onSaveAs(self) -> bool:
         saveLocation = QFileDialog.getExistingDirectory(self, "Save Story As...")
 
         if saveLocation == "":
-            return
+            return False
 
         storyData = self.storyObjectToDict()
 
@@ -135,6 +138,7 @@ class MainWindow(QMainWindow):
 
         self.currentStory.resetModified()
         self.updateWindowTitle()
+        return True
 
     def onOpen(self):
         openLocation = QFileDialog.getExistingDirectory(self, "Open Story...")
@@ -159,9 +163,12 @@ class MainWindow(QMainWindow):
 
         newStory = Story(startBlock=startBlock, blocks=blocks)
 
+        self.currentStory.stateChanged.disconnect(self.updateWindowTitle)
         self.currentStory = newStory
-
+        self.currentStory.stateChanged.connect(self.updateWindowTitle)
         self.currentStoryPath = openLocation
+
+
 
         self.graphScene.setStory(self.currentStory)
         self.editor.setStory(self.currentStory)
@@ -196,6 +203,29 @@ class MainWindow(QMainWindow):
 
     def blockRemoved(self, block: StoryBlock):
         self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))
+
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self.currentStory.modified():
+            box = QMessageBox.question(
+                self,
+                "",
+                "There are unsaved changes in this story. Do you want to save?",
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save
+            )
+            if box == QMessageBox.StandardButton.Save:
+                if self.onSave():
+                    event.accept()
+                else:
+                    event.ignore()
+            elif box == QMessageBox.StandardButton.Discard:
+                event.accept()
+            else:
+                event.ignore()
+            
+        else:
+            event.accept()
 
 
 app = QApplication(argv)
