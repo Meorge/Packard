@@ -1,9 +1,10 @@
+from enum import unique
 from PyQt6.QtGui import QUndoCommand
 from PyQt6.QtCore import QObject, QPointF, pyqtSignal
 from re import compile, escape
 from time import time
-
-LINK_RE = compile(r"\[\[(.*?)->(.*?)\]\]")
+from saver import check_story_for_errors
+from story_link import LINK_RE
 
 
 class SetStoryBlockNameCommand(QUndoCommand):
@@ -37,7 +38,11 @@ class SetStoryBlockBodyCommand(QUndoCommand):
 class MoveStoryBlocksCommand(QUndoCommand):
     def __init__(self, storyBlocks: dict["StoryBlock", QPointF], delta: QPointF):
         super().__init__()
-        self.setText(f"Move Block" if len(storyBlocks) == 1 else f"Move {len(storyBlocks)} Blocks")
+        self.setText(
+            f"Move Block"
+            if len(storyBlocks) == 1
+            else f"Move {len(storyBlocks)} Blocks"
+        )
         self.__storyBlocks = storyBlocks
         self.__delta = delta
 
@@ -153,6 +158,9 @@ class StoryBlock(QObject):
     def __repr__(self) -> str:
         return f'<StoryBlock title="{self.__title}" id="{self.__id}">'
 
+    def parent(self) -> "Story":
+        return super().parent()
+
     def setPos(self, pos: QPointF):
         self.__pos = pos
         self.posChanged.emit()
@@ -167,7 +175,7 @@ class StoryBlock(QObject):
 
     def title(self) -> str:
         return self.__title
-    
+
     def setId(self, id: str):
         oldId = self.__id
         self.__id = id
@@ -184,7 +192,9 @@ class StoryBlock(QObject):
         return self.__body
 
     def addConnection(self, targetBlock: "StoryBlock"):
-        self.setBody(self.body() + "\n" + f"[[{targetBlock.title()}->{targetBlock.id()}]]")
+        self.setBody(
+            self.body() + "\n" + f"[[{targetBlock.title()}->{targetBlock.id()}]]"
+        )
 
 
 class Story(QObject):
@@ -211,8 +221,9 @@ class Story(QObject):
 
     def modified(self) -> bool:
         return self.__modified
-    
+
     def onStateChanged(self):
+        self.__cachedErrors = check_story_for_errors(self.data())
         self.__modified = True
 
     def makeBlockConnections(self, block: StoryBlock):
@@ -240,6 +251,9 @@ class Story(QObject):
         return self.__blocks.copy()
 
     def addBlock(self, block: StoryBlock):
+        if block in self.blocks():
+            return
+
         self.makeBlockConnections(block)
         self.__blocks.append(block)
 
@@ -259,9 +273,13 @@ class Story(QObject):
         b = compile(r"\[\[(.*?)->" + escape(oldId) + r"\]\]")
         for otherBlock in self.__blocks:
             otherBlock.setBody(
-                b.sub(r"[[\1->" + block.id().replace('\\', r'\\') + r"]]", otherBlock.body())
+                b.sub(
+                    r"[[\1->" + block.id().replace("\\", r"\\") + r"]]",
+                    otherBlock.body(),
+                )
             )
         self.stateChanged.emit()
+
 
     def getConnectionsForBlock(self, block: StoryBlock) -> list[StoryBlock]:
         connections: list[StoryBlock] = []
@@ -269,8 +287,22 @@ class Story(QObject):
             targetBlocks = [b for b in self.blocks() if b.id() == targetBlockId]
             if len(targetBlocks) == 1:
                 connections.append(targetBlocks[0])
-            elif len(targetBlocks) <= 0:
-                print(f'No blocks with ID "{targetBlockId}"')
-            else:
-                print(f'Multiple blocks with ID "{targetBlockId}"')
         return connections
+    
+    def errors(self) -> dict[str, list[dict]]:
+        return check_story_for_errors(self.data())
+
+    def data(self) -> dict:
+        return {
+            "start": self.startBlock().id() if isinstance(self.startBlock(), StoryBlock) else None,
+            "blocks": [
+                {
+                    "x": block.pos().x(),
+                    "y": block.pos().y(),
+                    "title": block.title(),
+                    "id": block.id(),
+                    "body": block.body(),
+                }
+                for block in self.blocks()
+            ],
+        }

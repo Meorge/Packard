@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QDockWidget,
     QFileDialog,
-    QMessageBox
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack, QCloseEvent
@@ -14,10 +14,15 @@ from sys import argv
 from block_editor import BlockEditor
 from graph_scene import GraphScene
 from story_document_block import StoryBlockGraphicsItem
-from saver import load_story, save_story, compile_story_to_html
+from saver import errors_as_list, load_story, save_story, compile_story_to_html
 from os.path import basename
 
-from story_components import AddStoryBlockCommand, DeleteStoryBlockCommand, Story, StoryBlock
+from story_components import (
+    AddStoryBlockCommand,
+    DeleteStoryBlockCommand,
+    Story,
+    StoryBlock,
+)
 
 
 class MainWindow(QMainWindow):
@@ -29,7 +34,9 @@ class MainWindow(QMainWindow):
         self.currentStory = Story(self)
         self.currentStory.stateChanged.connect(self.updateWindowTitle)
 
-        self.graphScene = GraphScene(parent=self, undoStack=self.undoStack, story=self.currentStory)
+        self.graphScene = GraphScene(
+            parent=self, undoStack=self.undoStack, story=self.currentStory
+        )
 
         self.graphScene.blockAdded.connect(self.blockAdded)
         self.graphScene.blockRemoved.connect(self.blockRemoved)
@@ -47,7 +54,9 @@ class MainWindow(QMainWindow):
         self.graphScene.blockSelectionChanged.connect(self.onSelectionChanged)
 
         # set up editor
-        self.editor = BlockEditor(undoStack=self.undoStack, parent=self, story=self.currentStory)
+        self.editor = BlockEditor(
+            undoStack=self.undoStack, parent=self, story=self.currentStory
+        )
         self.onSelectionChanged()
 
         self.editorDockWidget = QDockWidget("Editor")
@@ -82,7 +91,6 @@ class MainWindow(QMainWindow):
             triggered=self.onCompileStory,
         )
 
-
         self.editMenu = self.menuBar().addMenu("&Edit")
 
         self.undoAction = self.undoStack.createUndoAction(self)
@@ -104,24 +112,10 @@ class MainWindow(QMainWindow):
     def onSave(self) -> bool:
         if self.currentStoryPath is None:
             return self.onSaveAs()
-        save_story(self.currentStoryPath, self.storyObjectToDict())
+
+        save_story(self.currentStoryPath, self.currentStory.data())
         self.currentStory.resetModified()
         return True
-
-    def storyObjectToDict(self):
-        return {
-            "start": self.currentStory.startBlock().id(),
-            "blocks": [
-                {
-                    "x": block.pos().x(),
-                    "y": block.pos().y(),
-                    "title": block.title(),
-                    "id": block.id(),
-                    "body": block.body(),
-                }
-                for block in self.currentStory.blocks()
-            ],
-        }
 
     def onSaveAs(self) -> bool:
         saveLocation = QFileDialog.getExistingDirectory(self, "Save Story As...")
@@ -129,7 +123,7 @@ class MainWindow(QMainWindow):
         if saveLocation == "":
             return False
 
-        storyData = self.storyObjectToDict()
+        storyData = self.currentStory.data()
 
         # TODO: handle errors in saving story
         save_story(saveLocation, storyData)
@@ -168,14 +162,25 @@ class MainWindow(QMainWindow):
         self.currentStory.stateChanged.connect(self.updateWindowTitle)
         self.currentStoryPath = openLocation
 
-
-
         self.graphScene.setStory(self.currentStory)
         self.editor.setStory(self.currentStory)
 
         self.updateWindowTitle()
 
     def onCompileStory(self):
+        totalErrors = errors_as_list(self.currentStory.errors())
+        if len(totalErrors) > 0:
+            errorString = f"{'were' if len(totalErrors) != 1 else 'was'} {len(totalErrors)} error{'s' if len(totalErrors) != 1 else ''}"
+            QMessageBox.critical(
+                self,
+                "Could not compile story",
+                f"""The story could not be compiled because there {errorString}.
+                Please fix the errors and try again.""",
+                QMessageBox.StandardButton.Ok,
+                QMessageBox.StandardButton.Ok,
+            )
+            return False
+    
         compileLocation = QFileDialog.getExistingDirectory(self, "Compile Story...")
 
         if compileLocation == "":
@@ -186,7 +191,11 @@ class MainWindow(QMainWindow):
 
     def updateWindowTitle(self):
         title = "Packard - "
-        title += basename(self.currentStoryPath) if self.currentStoryPath is not None else "Untitled Story"
+        title += (
+            basename(self.currentStoryPath)
+            if self.currentStoryPath is not None
+            else "Untitled Story"
+        )
         if self.currentStory.modified():
             title += " (Unsaved)"
         self.setWindowTitle(title)
@@ -204,15 +213,16 @@ class MainWindow(QMainWindow):
     def blockRemoved(self, block: StoryBlock):
         self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))
 
-
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.currentStory.modified():
             box = QMessageBox.question(
                 self,
                 "",
                 "There are unsaved changes in this story. Do you want to save?",
-                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save,
             )
             if box == QMessageBox.StandardButton.Save:
                 if self.onSave():
@@ -223,7 +233,7 @@ class MainWindow(QMainWindow):
                 event.accept()
             else:
                 event.ignore()
-            
+
         else:
             event.accept()
 

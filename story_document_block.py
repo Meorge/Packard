@@ -22,9 +22,6 @@ from constants import (
 )
 from story_components import StoryBlock
 
-LINK_RE = compile(r"\[\[(.*?)\]\]")
-
-
 class StoryBlockGraphicsItem(QGraphicsItem, QObject):
     def __init__(self, parent: QGraphicsItem | None = None, block: StoryBlock = None) -> None:
         super().__init__(parent)

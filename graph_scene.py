@@ -1,4 +1,3 @@
-from time import time
 from PyQt6.QtWidgets import (
     QGraphicsSceneMouseEvent,
     QGraphicsScene,
@@ -14,6 +13,7 @@ from PyQt6.QtGui import (
     QColor
 )
 from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal, QSizeF, QMarginsF
+from block_editor import BlockEditor
 
 from story_components import (
     AddLinkBetweenBlocksCommand,
@@ -39,6 +39,7 @@ from constants import (
     OUTPUT_RADIUS,
     BLOCK_RECT_SIZE,
     SELECTED_BLOCK_PEN,
+    ERROR_BADGE_COLOR
 )
 
 
@@ -90,6 +91,7 @@ class GraphScene(QGraphicsScene):
 
     def drawBlock(self, painter: QPainter, block: StoryBlock):
         # Draw the output node
+        br = self.blockRect(block)
         painter.setBrush(
             OUTPUT_COLOR
         )
@@ -104,7 +106,7 @@ class GraphScene(QGraphicsScene):
             else QPen(Qt.PenStyle.NoPen)
         )
         painter.drawRoundedRect(
-            self.blockRect(block),
+            br,
             10,
             10,
             Qt.SizeMode.AbsoluteSize,
@@ -112,16 +114,37 @@ class GraphScene(QGraphicsScene):
 
         painter.setPen(Qt.GlobalColor.white)
         painter.drawText(
-            self.blockRect(block),
+            br,
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
             block.title(),
         )
 
         painter.setPen(QColor(255, 255, 255, 128))
         painter.drawText(
-            self.blockRect(block).topLeft() - QPointF(0, 8),
+            br.topLeft() - QPointF(0, 8),
             f"{block.pos().x()}, {block.pos().y()}",
         )
+
+
+        # Draw errors
+        numberOfErrors = len(self.__story.errors().get(block.id(), []))
+        if numberOfErrors > 0:
+            errorSpotRect = QRectF(
+                br.topLeft() - QPointF(6, 6),
+                QSizeF(20, 20)
+            )
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(ERROR_BADGE_COLOR)
+            painter.drawEllipse(errorSpotRect)
+
+            painter.setPen(Qt.GlobalColor.white)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawText(
+                errorSpotRect,
+                Qt.AlignmentFlag.AlignCenter,
+                str(numberOfErrors)
+            )
+
 
     def blockRect(self, block: StoryBlock) -> QRectF:
         return QRectF(
