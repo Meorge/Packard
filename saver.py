@@ -27,6 +27,14 @@ def check_story_for_errors(story_data: dict):
                 )
     return story_errors
 
+def error_to_string(error: dict) -> str:
+    t = error.get("type", "")
+    if t == "non_unique_id":
+        return f"ID is not unique"
+    elif t == "unknown_id_referenced":
+        return f"Block with ID \"{error['referenced_id']}\" doesn't exist"
+    else:
+        return f"Unknown error (code \"{t}\")"
 
 def errors_as_list(errors: dict[str, list[dict]]) -> list[dict]:
     errors_out: list[dict] = []

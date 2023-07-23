@@ -304,10 +304,6 @@ class GraphScene(QGraphicsScene):
                     10,
                 )
 
-        # painter.setBrush(Qt.BrushStyle.NoBrush)
-        # painter.setPen(Qt.GlobalColor.green)
-        # painter.drawRect(self.sceneRect())
-
         # Draw all blocks
         for block in self.__story.blocks():
             self.drawBlock(painter, block)

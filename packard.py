@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack, QCloseEvent
 from sys import argv
 from block_editor import BlockEditor
+from error_list_widget import ErrorListWidget
 from graph_scene import GraphScene
 from story_document_block import StoryBlockGraphicsItem
 from saver import errors_as_list, load_story, save_story, compile_story_to_html
@@ -58,10 +59,18 @@ class MainWindow(QMainWindow):
             undoStack=self.undoStack, parent=self, story=self.currentStory
         )
         self.onSelectionChanged()
-
         self.editorDockWidget = QDockWidget("Editor")
         self.editorDockWidget.setWidget(self.editor)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.editorDockWidget)
+
+        # Set up error pane
+        self.errorPaneContents = ErrorListWidget(
+            self,
+            self.currentStory
+        )
+        self.errorPaneDockWidget = QDockWidget("Errors")
+        self.errorPaneDockWidget.setWidget(self.errorPaneContents)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.errorPaneDockWidget)
 
         # menu bar
         self.fileMenu = self.menuBar().addMenu("&File")
@@ -163,6 +172,7 @@ class MainWindow(QMainWindow):
         self.currentStoryPath = openLocation
 
         self.graphScene.setStory(self.currentStory)
+        self.errorPaneContents.setStory(self.currentStory)
         self.editor.setStory(self.currentStory)
 
         self.updateWindowTitle()

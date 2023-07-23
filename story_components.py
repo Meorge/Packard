@@ -199,6 +199,7 @@ class StoryBlock(QObject):
 
 class Story(QObject):
     stateChanged = pyqtSignal()
+    errorsReevaluated = pyqtSignal()
 
     def __init__(
         self,
@@ -233,12 +234,20 @@ class Story(QObject):
         block.bodyChanged.connect(self.stateChanged)
         block.posChanged.connect(self.stateChanged)
 
+        block.titleChanged.connect(self.errorsReevaluated)
+        block.idChanged.connect(self.errorsReevaluated)
+        block.bodyChanged.connect(self.errorsReevaluated)
+
     def disconnectBlockSignals(self, block: StoryBlock):
         block.setParent(None)
         block.titleChanged.disconnect(self.stateChanged)
         block.idChanged.disconnect(self.updateBlockId)
         block.bodyChanged.disconnect(self.stateChanged)
         block.posChanged.disconnect(self.stateChanged)
+
+        block.titleChanged.disconnect(self.errorsReevaluated)
+        block.idChanged.disconnect(self.errorsReevaluated)
+        block.bodyChanged.disconnect(self.errorsReevaluated)
 
     def setStartBlock(self, block: StoryBlock):
         self.__startBlock = block
@@ -261,6 +270,7 @@ class Story(QObject):
             self.setStartBlock(block)
 
         self.stateChanged.emit()
+        self.errorsReevaluated.emit()
 
     def removeBlock(self, block: StoryBlock):
         self.disconnectBlockSignals(block)
@@ -268,6 +278,7 @@ class Story(QObject):
         if self.__startBlock == block:
             self.__startBlock = None
         self.stateChanged.emit()
+        self.errorsReevaluated.emit()
 
     def updateBlockId(self, block: StoryBlock, oldId: str):
         b = compile(r"\[\[(.*?)->" + escape(oldId) + r"\]\]")
