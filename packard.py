@@ -14,7 +14,7 @@ from sys import argv
 from block_editor import BlockEditor
 from error_list_widget import ErrorListWidget
 from graph_scene import GraphScene
-from story_document_block import StoryBlockGraphicsItem
+from status_bar import StatusBar
 from saver import errors_as_list, load_story, save_story, compile_story_to_html
 from os.path import basename
 
@@ -71,6 +71,11 @@ class MainWindow(QMainWindow):
         self.errorPaneDockWidget = QDockWidget("Errors")
         self.errorPaneDockWidget.setWidget(self.errorPaneContents)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.errorPaneDockWidget)
+
+
+        # Status bar
+        self.__statusBar = StatusBar(self)
+        self.setStatusBar(self.__statusBar)
 
         # menu bar
         self.fileMenu = self.menuBar().addMenu("&File")
