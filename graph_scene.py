@@ -48,16 +48,16 @@ class GraphScene(QGraphicsScene):
     blockRemoved = pyqtSignal(StoryBlock)
     blockSelectionChanged = pyqtSignal()
 
-    def __init__(self, undoStack: QUndoStack, parent=None, story: Story = None):
+    def __init__(self, undoStack: QUndoStack, parent=None):
         super().__init__(parent)
+
+        self.__story: Story | None = None
 
         self.__undoStack = undoStack
 
         SCENE_SIZE = 10000
         self.setSceneRect(0, 0, SCENE_SIZE, SCENE_SIZE)
 
-        self.__story = story
-        self.__story.stateChanged.connect(self.onStateChanged)
         self.__selectedBlocks: list[StoryBlock] = []
         self.__selectedBlocksInitialPositions: dict = {}
 
@@ -69,9 +69,13 @@ class GraphScene(QGraphicsScene):
         self.__newConnectionTargetPoint: QPointF | None = None
 
     def setStory(self, story: Story):
-        self.__story.stateChanged.disconnect(self.onStateChanged)
+        if self.__story is not None:
+            self.__story.stateChanged.disconnect(self.onStateChanged)
         self.__story = story
-        self.__story.stateChanged.connect(self.onStateChanged)
+
+        if self.__story is not None:
+            self.__story.stateChanged.connect(self.onStateChanged)
+
         self.clear()
         self.__newConnectionSourceBlock = None
         self.__newConnectionTargetBlock = None
@@ -183,6 +187,10 @@ class GraphScene(QGraphicsScene):
             painter.drawLine(x, y1, x, y2)
         for y in range(int(y1), int(y2 + 1), CELL_SIZE):
             painter.drawLine(x1, y, x2, y)
+
+        # Nothing else to draw if there's no story!
+        if self.__story is None:
+            return
 
         # Draw start block arrow
         if self.__story.startBlock() is not None:

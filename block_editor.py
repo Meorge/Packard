@@ -12,7 +12,7 @@ from story_components import (
 
 class BlockEditor(QWidget):
     def __init__(
-        self, undoStack: QUndoStack, parent: QWidget | None = None, story: Story = None
+        self, undoStack: QUndoStack, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
 
@@ -38,8 +38,6 @@ class BlockEditor(QWidget):
         self.layout().addWidget(self.idField)
         self.layout().addWidget(self.isStartBlockField)
         self.layout().addWidget(self.bodyField)
-
-        self.setStory(story)
 
     def setStory(self, story: Story):
         self.__story = story

@@ -10,7 +10,7 @@ CONTENT_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 class ErrorListWidget(QWidget):
-    def __init__(self, parent: QWidget | None = None, story: Story = None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.__story: Story | None = None
 
@@ -23,9 +23,7 @@ class ErrorListWidget(QWidget):
 
         self.__ly = QVBoxLayout(self)
         self.__ly.addWidget(self.__listWidget)
-
-        self.setStory(story)
-
+        
     def setStory(self, story: Story):
         if self.__story is not None:
             self.__story.errorsReevaluated.disconnect(self.onErrorsReevaluated)

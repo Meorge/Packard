@@ -1,20 +1,48 @@
 from PyQt6.QtWidgets import QStatusBar, QWidget, QSlider, QHBoxLayout, QPushButton, QSizePolicy
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt, pyqtSignal
+
+from story_components import Story
 
 class StatusBar(QStatusBar):
-    def __init__(self, parent: QWidget | None = ...) -> None:
+    zoomSet = pyqtSignal(float)
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         
+        self.__story: Story | None = None
         self.__numBlocksLabel = StatusBarPushButton("X blocks", self)
-        self.__numWordsLabel = StatusBarPushButton("XXX words", self)
         self.__numErrorsLabel = StatusBarPushButton("🚫3", self)
 
-        self.__zoomer = ZoomSlider(self)
+        #self.__zoomer = ZoomSlider(self)
+        #self.__zoomer.zoomSet.connect(self.zoomSet)
 
         self.addWidget(self.__numBlocksLabel)
-        self.addWidget(self.__numWordsLabel)
         self.addWidget(self.__numErrorsLabel)
-        self.addPermanentWidget(self.__zoomer)
+        #self.addPermanentWidget(self.__zoomer)
+
+
+    def setStory(self, story: Story):
+        if self.__story is not None:
+            self.__story.stateChanged.disconnect(self.onStoryStateChanged)
+            self.__story.errorsReevaluated.disconnect(self.onStoryErrorsReevaluated)
+        self.__story = story
+        if self.__story is not None:
+            self.__story.stateChanged.connect(self.onStoryStateChanged)
+            self.__story.errorsReevaluated.connect(self.onStoryErrorsReevaluated)
+
+        self.onStoryStateChanged()
+        self.onStoryErrorsReevaluated()
+
+    def setToggleErrorPaneAction(self, action: QAction):
+        self.__numErrorsLabel.clicked.connect(action.trigger)
+
+    def onStoryStateChanged(self):
+        self.__numBlocksLabel.setText(f"{len(self.__story.blocks())} blocks")
+
+    def onStoryErrorsReevaluated(self):
+        self.__numErrorsLabel.setText(f"🚫{len(self.__story.errorsAsList())}")
+
+        
 
 class StatusBarPushButton(QPushButton):
     def __init__(self, text: str, parent: QWidget | None = None, **kwargs):
@@ -28,6 +56,7 @@ class StatusBarPushButton(QPushButton):
 ZOOM_BUTTON_STEP = 10
 
 class ZoomSlider(QWidget):
+    zoomSet = pyqtSignal(float)
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -72,4 +101,5 @@ class ZoomSlider(QWidget):
 
     def onZoomChanged(self):
         self.__zoomAmountLabel.setText(f"{self.__slider.value()}%")
+        self.zoomSet.emit(self.__slider.value())
         

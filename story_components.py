@@ -3,7 +3,7 @@ from PyQt6.QtGui import QUndoCommand
 from PyQt6.QtCore import QObject, QPointF, pyqtSignal
 from re import compile, escape
 from time import time
-from saver import check_story_for_errors
+from saver import check_story_for_errors, errors_as_list
 from story_link import LINK_RE
 
 
@@ -302,6 +302,9 @@ class Story(QObject):
     
     def errors(self) -> dict[str, list[dict]]:
         return check_story_for_errors(self.data())
+    
+    def errorsAsList(self) -> list[dict]:
+        return errors_as_list(self.errors())
 
     def data(self) -> dict:
         return {

@@ -32,12 +32,9 @@ class MainWindow(QMainWindow):
         self.undoStack = QUndoStack(self)
         self.currentStoryPath: str | None = None
 
-        self.currentStory = Story(self)
-        self.currentStory.stateChanged.connect(self.updateWindowTitle)
+        self.currentStory: Story | None = None
 
-        self.graphScene = GraphScene(
-            parent=self, undoStack=self.undoStack, story=self.currentStory
-        )
+        self.graphScene = GraphScene(parent=self, undoStack=self.undoStack)
 
         self.graphScene.blockAdded.connect(self.blockAdded)
         self.graphScene.blockRemoved.connect(self.blockRemoved)
@@ -55,19 +52,14 @@ class MainWindow(QMainWindow):
         self.graphScene.blockSelectionChanged.connect(self.onSelectionChanged)
 
         # set up editor
-        self.editor = BlockEditor(
-            undoStack=self.undoStack, parent=self, story=self.currentStory
-        )
+        self.editor = BlockEditor(undoStack=self.undoStack, parent=self)
         self.onSelectionChanged()
         self.editorDockWidget = QDockWidget("Editor")
         self.editorDockWidget.setWidget(self.editor)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.editorDockWidget)
 
         # Set up error pane
-        self.errorPaneContents = ErrorListWidget(
-            self,
-            self.currentStory
-        )
+        self.errorPaneContents = ErrorListWidget(self)
         self.errorPaneDockWidget = QDockWidget("Errors")
         self.errorPaneDockWidget.setWidget(self.errorPaneContents)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.errorPaneDockWidget)
@@ -76,6 +68,9 @@ class MainWindow(QMainWindow):
         # Status bar
         self.__statusBar = StatusBar(self)
         self.setStatusBar(self.__statusBar)
+        self.__statusBar.zoomSet.connect(self.onZoomSet)
+
+        self.__statusBar.setToggleErrorPaneAction(self.errorPaneDockWidget.toggleViewAction())
 
         # menu bar
         self.fileMenu = self.menuBar().addMenu("&File")
@@ -121,7 +116,11 @@ class MainWindow(QMainWindow):
         self.editMenu.addAction(self.undoAction)
         self.editMenu.addAction(self.redoAction)
 
+        self.setStory(Story())
+
         self.updateWindowTitle()
+
+
 
     def onSave(self) -> bool:
         if self.currentStoryPath is None:
@@ -171,16 +170,25 @@ class MainWindow(QMainWindow):
 
         newStory = Story(startBlock=startBlock, blocks=blocks)
 
-        self.currentStory.stateChanged.disconnect(self.updateWindowTitle)
-        self.currentStory = newStory
-        self.currentStory.stateChanged.connect(self.updateWindowTitle)
+
         self.currentStoryPath = openLocation
+
+        self.setStory(newStory)
+
+        self.updateWindowTitle()
+
+    def setStory(self, story: Story):
+        if self.currentStory is not None:
+            self.currentStory.stateChanged.disconnect(self.updateWindowTitle)
+        self.currentStory = story
+
+        if self.currentStory is not None:
+            self.currentStory.stateChanged.connect(self.updateWindowTitle)
 
         self.graphScene.setStory(self.currentStory)
         self.errorPaneContents.setStory(self.currentStory)
         self.editor.setStory(self.currentStory)
-
-        self.updateWindowTitle()
+        self.__statusBar.setStory(self.currentStory)
 
     def onCompileStory(self):
         totalErrors = errors_as_list(self.currentStory.errors())
@@ -227,6 +235,9 @@ class MainWindow(QMainWindow):
 
     def blockRemoved(self, block: StoryBlock):
         self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))
+
+    def onZoomSet(self, zoomAmount: float):
+        print(f"Zoom set to {zoomAmount}")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.currentStory.modified():
