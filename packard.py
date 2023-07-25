@@ -9,11 +9,12 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack, QCloseEvent
+from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack, QCloseEvent, QTransform
 from sys import argv
 from block_editor import BlockEditor
 from error_list_widget import ErrorListWidget
 from graph_scene import GraphScene
+from graph_view import GraphView
 from status_bar import StatusBar
 from saver import errors_as_list, load_story, save_story, compile_story_to_html
 from os.path import basename
@@ -39,13 +40,7 @@ class MainWindow(QMainWindow):
         self.graphScene.blockAdded.connect(self.blockAdded)
         self.graphScene.blockRemoved.connect(self.blockRemoved)
 
-        self.graphView = QGraphicsView(self.graphScene, parent=self)
-        self.graphView.setRenderHints(
-            self.graphView.renderHints()
-            | QPainter.RenderHint.Antialiasing
-            | QPainter.RenderHint.SmoothPixmapTransform
-        )
-        self.graphView.setMouseTracking(True)
+        self.graphView = GraphView(self.graphScene, parent=self)
 
         self.setCentralWidget(self.graphView)
 
@@ -237,7 +232,9 @@ class MainWindow(QMainWindow):
         self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))
 
     def onZoomSet(self, zoomAmount: float):
-        print(f"Zoom set to {zoomAmount}")
+        tr = QTransform()
+        tr.scale(zoomAmount / 100.0, zoomAmount / 100.0)
+        self.graphView.setTransform(tr)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.currentStory.modified():

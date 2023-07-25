@@ -13,7 +13,7 @@ from PyQt6.QtGui import (
     QColor
 )
 from PyQt6.QtCore import QRectF, Qt, QPointF, pyqtSignal, QSizeF, QMarginsF
-from block_editor import BlockEditor
+from add_new_block_widget import AddNewBlockWidget
 
 from story_components import (
     AddLinkBetweenBlocksCommand,
@@ -28,6 +28,7 @@ from constants import (
     CELL_SIZE,
     BG_COLOR,
     CONNECTION_BEZIER_AMT,
+    ERROR_BLOCK_COLOR,
     GRID_COLOR,
     CONNECTION_COLOR,
     CONNECTION_WIDTH,
@@ -55,7 +56,7 @@ class GraphScene(QGraphicsScene):
 
         self.__undoStack = undoStack
 
-        SCENE_SIZE = 10000
+        SCENE_SIZE = 500
         self.setSceneRect(0, 0, SCENE_SIZE, SCENE_SIZE)
 
         self.__selectedBlocks: list[StoryBlock] = []
@@ -102,7 +103,8 @@ class GraphScene(QGraphicsScene):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(self.outputNodeRect(block))
 
-        painter.setBrush(BLOCK_COLOR)
+        hasErrors = len(self.__story.errors().get(block.id(), [])) > 0
+        painter.setBrush(ERROR_BLOCK_COLOR if hasErrors else  BLOCK_COLOR)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setPen(
             SELECTED_BLOCK_PEN
@@ -128,27 +130,6 @@ class GraphScene(QGraphicsScene):
             br.topLeft() - QPointF(0, 8),
             f"{block.pos().x()}, {block.pos().y()}",
         )
-
-
-        # Draw errors
-        numberOfErrors = len(self.__story.errors().get(block.id(), []))
-        if numberOfErrors > 0:
-            errorSpotRect = QRectF(
-                br.topLeft() - QPointF(6, 6),
-                QSizeF(20, 20)
-            )
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(ERROR_BADGE_COLOR)
-            painter.drawEllipse(errorSpotRect)
-
-            painter.setPen(Qt.GlobalColor.white)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawText(
-                errorSpotRect,
-                Qt.AlignmentFlag.AlignCenter,
-                str(numberOfErrors)
-            )
-
 
     def blockRect(self, block: StoryBlock) -> QRectF:
         return QRectF(

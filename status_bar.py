@@ -13,12 +13,12 @@ class StatusBar(QStatusBar):
         self.__numBlocksLabel = StatusBarPushButton("X blocks", self)
         self.__numErrorsLabel = StatusBarPushButton("🚫3", self)
 
-        #self.__zoomer = ZoomSlider(self)
-        #self.__zoomer.zoomSet.connect(self.zoomSet)
+        self.__zoomer = ZoomSlider(self)
+        self.__zoomer.zoomSet.connect(self.zoomSet)
 
         self.addWidget(self.__numBlocksLabel)
         self.addWidget(self.__numErrorsLabel)
-        #self.addPermanentWidget(self.__zoomer)
+        self.addPermanentWidget(self.__zoomer)
 
 
     def setStory(self, story: Story):
@@ -62,26 +62,20 @@ class ZoomSlider(QWidget):
 
         self.setLayout(QHBoxLayout(spacing=0))
 
-        # TODO: clicking should decrease zoom
         self.__minusLabel = StatusBarPushButton("-", self, clicked=self.zoomOut)
-        # self.__minusLabel.clicked.connect(self.zoomOut)
 
-        # TODO: should reflect zoom level
         self.__slider = QSlider(Qt.Orientation.Horizontal)
         self.__slider.setTickInterval(10)
         self.__slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.__slider.valueChanged.connect(self.onZoomChanged)
 
-        # TODO: clicking should increase zoom
         self.__plusLabel = StatusBarPushButton("+", self, clicked=self.zoomIn)
 
-         # TODO: clicking should allow user to set zoom
         self.__zoomAmountLabel = StatusBarPushButton("100%", self)
 
-        self.__slider.setRange(0, 200)
+        self.__slider.setRange(1, 300)
         self.__slider.setSingleStep(1)
         
-
         self.layout().addWidget(self.__minusLabel)
         self.layout().addWidget(self.__slider)
         self.layout().addWidget(self.__plusLabel)
