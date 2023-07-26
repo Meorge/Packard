@@ -71,11 +71,11 @@ class SetStoryStartBlockCommand(QUndoCommand):
 
 
 class AddStoryBlockCommand(QUndoCommand):
-    def __init__(self, story: "Story", pos: QPointF):
+    def __init__(self, story: "Story", title: str, id: str, pos: QPointF):
         super().__init__()
         self.setText("Add Block")
         self.__story = story
-        self.__block = StoryBlock(pos=pos)
+        self.__block = StoryBlock(title=title, id=id, pos=pos)
 
     def undo(self):
         self.__story.removeBlock(self.__block)

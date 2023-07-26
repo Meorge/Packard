@@ -15,6 +15,7 @@ from block_editor import BlockEditor
 from error_list_widget import ErrorListWidget
 from graph_scene import GraphScene
 from graph_view import GraphView
+from id_ify import id_ify
 from status_bar import StatusBar
 from saver import errors_as_list, load_story, save_story, compile_story_to_html
 from os.path import basename
@@ -36,11 +37,14 @@ class MainWindow(QMainWindow):
         self.currentStory: Story | None = None
 
         self.graphScene = GraphScene(parent=self, undoStack=self.undoStack)
+        self.graphView = GraphView(self.graphScene, parent=self)
 
-        self.graphScene.blockAdded.connect(self.blockAdded)
+        self.graphScene.blockAdded.connect(self.graphView.onUserRequestedNewNode)
+        self.graphView.userConfirmedNewNode.connect(self.blockAdded)
+        # self.graphScene.blockAdded.connect(self.blockAdded)
         self.graphScene.blockRemoved.connect(self.blockRemoved)
 
-        self.graphView = GraphView(self.graphScene, parent=self)
+        
 
         self.setCentralWidget(self.graphView)
 
@@ -225,8 +229,8 @@ class MainWindow(QMainWindow):
         else:
             self.editor.setBlock(None)
 
-    def blockAdded(self, pos: QPointF):
-        self.undoStack.push(AddStoryBlockCommand(self.currentStory, pos))
+    def blockAdded(self, title: str, pos: QPointF):
+        self.undoStack.push(AddStoryBlockCommand(self.currentStory, title=title, id=id_ify(title), pos=pos))
 
     def blockRemoved(self, block: StoryBlock):
         self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))
