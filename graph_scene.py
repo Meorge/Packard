@@ -45,7 +45,7 @@ from constants import (
 
 
 class GraphScene(QGraphicsScene):
-    blockAdded = pyqtSignal(QPointF)
+    userRequestedBlockAdd = pyqtSignal(StoryBlock, QPointF)
     blockRemoved = pyqtSignal(StoryBlock)
     blockSelectionChanged = pyqtSignal()
 
@@ -397,11 +397,8 @@ class GraphScene(QGraphicsScene):
                 )
             else:
                 # Create a new block, and link the source block to it
-                self.__undoStack.push(
-                    AddStoryBlockWithLinkToExistingBlockCommand(
-                        self.__story, self.__newConnectionSourceBlock, event.scenePos() - QPointF(0, BLOCK_RECT_SIZE.height() / 2)
-                    )
-                )
+                pos = event.scenePos() - QPointF(0, BLOCK_RECT_SIZE.height() / 2)
+                self.userRequestedBlockAdd.emit(self.__newConnectionSourceBlock, pos)
 
         self.__selectedBlocksInitialPositions.clear()
         self.__mouseDownPos = None
@@ -433,6 +430,6 @@ class GraphScene(QGraphicsScene):
 
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if self.__newConnectionSourceBlock is None:
-            self.blockAdded.emit(event.scenePos())
+            self.userRequestedBlockAdd.emit(None, event.scenePos())
 
         return super().mouseDoubleClickEvent(event)

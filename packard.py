@@ -9,7 +9,14 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import QPainter, QAction, QKeySequence, QUndoStack, QCloseEvent, QTransform
+from PyQt6.QtGui import (
+    QPainter,
+    QAction,
+    QKeySequence,
+    QUndoStack,
+    QCloseEvent,
+    QTransform,
+)
 from sys import argv
 from block_editor import BlockEditor
 from error_list_widget import ErrorListWidget
@@ -23,6 +30,7 @@ from os.path import basename
 from story_components import (
     AddStoryBlockCommand,
     DeleteStoryBlockCommand,
+    AddStoryBlockWithLinkToExistingBlockCommand,
     Story,
     StoryBlock,
 )
@@ -39,12 +47,10 @@ class MainWindow(QMainWindow):
         self.graphScene = GraphScene(parent=self, undoStack=self.undoStack)
         self.graphView = GraphView(self.graphScene, parent=self)
 
-        self.graphScene.blockAdded.connect(self.graphView.onUserRequestedNewNode)
+        self.graphScene.userRequestedBlockAdd.connect(self.graphView.onUserRequestedNewNode)
         self.graphView.userConfirmedNewNode.connect(self.blockAdded)
         # self.graphScene.blockAdded.connect(self.blockAdded)
         self.graphScene.blockRemoved.connect(self.blockRemoved)
-
-        
 
         self.setCentralWidget(self.graphView)
 
@@ -61,15 +67,18 @@ class MainWindow(QMainWindow):
         self.errorPaneContents = ErrorListWidget(self)
         self.errorPaneDockWidget = QDockWidget("Errors")
         self.errorPaneDockWidget.setWidget(self.errorPaneContents)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.errorPaneDockWidget)
-
+        self.addDockWidget(
+            Qt.DockWidgetArea.LeftDockWidgetArea, self.errorPaneDockWidget
+        )
 
         # Status bar
         self.__statusBar = StatusBar(self)
         self.setStatusBar(self.__statusBar)
         self.__statusBar.zoomSet.connect(self.onZoomSet)
 
-        self.__statusBar.setToggleErrorPaneAction(self.errorPaneDockWidget.toggleViewAction())
+        self.__statusBar.setToggleErrorPaneAction(
+            self.errorPaneDockWidget.toggleViewAction()
+        )
 
         # menu bar
         self.fileMenu = self.menuBar().addMenu("&File")
@@ -119,8 +128,6 @@ class MainWindow(QMainWindow):
 
         self.updateWindowTitle()
 
-
-
     def onSave(self) -> bool:
         if self.currentStoryPath is None:
             return self.onSaveAs()
@@ -169,7 +176,6 @@ class MainWindow(QMainWindow):
 
         newStory = Story(startBlock=startBlock, blocks=blocks)
 
-
         self.currentStoryPath = openLocation
 
         self.setStory(newStory)
@@ -202,7 +208,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.Ok,
             )
             return False
-    
+
         compileLocation = QFileDialog.getExistingDirectory(self, "Compile Story...")
 
         if compileLocation == "":
@@ -229,8 +235,23 @@ class MainWindow(QMainWindow):
         else:
             self.editor.setBlock(None)
 
-    def blockAdded(self, title: str, pos: QPointF):
-        self.undoStack.push(AddStoryBlockCommand(self.currentStory, title=title, id=id_ify(title), pos=pos))
+    def blockAdded(self, title: str, sourceBlock: StoryBlock, pos: QPointF):
+        if sourceBlock is None:
+            self.undoStack.push(
+                AddStoryBlockCommand(
+                    self.currentStory, title=title, id=id_ify(title), pos=pos
+                )
+            )
+        else:
+            self.undoStack.push(
+                AddStoryBlockWithLinkToExistingBlockCommand(
+                    self.currentStory,
+                    title=title,
+                    id=id_ify(title),
+                    sourceBlock=sourceBlock,
+                    pos=pos
+                )
+            )
 
     def blockRemoved(self, block: StoryBlock):
         self.undoStack.push(DeleteStoryBlockCommand(self.currentStory, block))

@@ -85,12 +85,19 @@ class AddStoryBlockCommand(QUndoCommand):
 
 
 class AddStoryBlockWithLinkToExistingBlockCommand(QUndoCommand):
-    def __init__(self, story: "Story", sourceBlock: "StoryBlock", pos: QPointF):
+    def __init__(
+        self,
+        story: "Story",
+        sourceBlock: "StoryBlock",
+        title: str,
+        id: str,
+        pos: QPointF,
+    ):
         super().__init__()
         self.setText("Add and Connect Block")
         self.__story = story
         self.__sourceBlock = sourceBlock
-        self.__newBlock = StoryBlock(pos=pos)
+        self.__newBlock = StoryBlock(title=title, id=id, pos=pos)
 
     def undo(self):
         self.__sourceBlock.setBody(
@@ -291,7 +298,6 @@ class Story(QObject):
             )
         self.stateChanged.emit()
 
-
     def getConnectionsForBlock(self, block: StoryBlock) -> list[StoryBlock]:
         connections: list[StoryBlock] = []
         for _, targetBlockId in LINK_RE.findall(block.body()):
@@ -299,16 +305,18 @@ class Story(QObject):
             if len(targetBlocks) == 1:
                 connections.append(targetBlocks[0])
         return connections
-    
+
     def errors(self) -> dict[str, list[dict]]:
         return check_story_for_errors(self.data())
-    
+
     def errorsAsList(self) -> list[dict]:
         return errors_as_list(self.errors())
 
     def data(self) -> dict:
         return {
-            "start": self.startBlock().id() if isinstance(self.startBlock(), StoryBlock) else None,
+            "start": self.startBlock().id()
+            if isinstance(self.startBlock(), StoryBlock)
+            else None,
             "blocks": [
                 {
                     "x": block.pos().x(),
